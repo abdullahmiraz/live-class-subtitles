@@ -11,7 +11,7 @@ const send = (m) => chrome.runtime.sendMessage({ target: "background", ...m }).c
 
 function connect() {
   clearTimeout(reconnectTimer);
-  const url = `${settings.server}/tab?engine=${encodeURIComponent(settings.engine)}&hide_en=${settings.hideEn ? 1 : 0}&learn=${settings.learn ? 1 : 0}`;
+  const url = `${settings.server}/tab?engine=${encodeURIComponent(settings.engine)}&target=${encodeURIComponent(settings.target || "en")}&hide_en=${settings.hideEn ? 1 : 0}&learn=${settings.learn ? 1 : 0}`;
   const sock = new WebSocket(url);
   ws = sock;
   sock.binaryType = "arraybuffer";
@@ -170,7 +170,10 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
       case "start":
         settings = msg.settings;
         tabId = msg.tabId;
-        start(msg.streamId).catch((e) => send({ type: "sub", kind: "error", ru: "", en: `Capture failed: ${e.message}` }));
+        start(msg.streamId).catch((e) => send({ type: "sub", kind: "error", ru: "",
+          en: settings.audioSource === "mic" && /Permission|NotAllowed|NotFound/i.test(e.name + e.message)
+            ? "Microphone not available: popup → Advanced → set up microphone"
+            : `Capture failed: ${e.message}` }));
         break;
       case "stop": stop(); break;
       case "flush": return done(flush());
@@ -184,7 +187,7 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
         break;
       case "settings": {
         const changed = (k) => k in msg.settings && msg.settings[k] !== settings[k];
-        const reconnect = settings && (changed("engine") || changed("hideEn") || changed("learn"));
+        const reconnect = settings && (changed("engine") || changed("target") || changed("hideEn") || changed("learn"));
         settings = { ...settings, ...msg.settings };
         if (reconnect && ws && !stopped) {
           // finish the current sentence on the old connection, then switch right away (no "offline" flash)

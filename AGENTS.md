@@ -1,6 +1,6 @@
 # AGENTS.md: guide for AI coding agents (and humans)
 
-Live Russian → English subtitles for any Chrome tab. A Chrome MV3 extension captures tab audio and streams it to a **local Python server**. The server transcribes the Russian on the CPU and translates it through free online endpoints.
+Live Russian → English (or 37 other languages) subtitles for any Chrome tab. A Chrome MV3 extension captures tab audio and streams it to a **local Python server**. The server transcribes the Russian on the CPU and translates it through free online endpoints.
 
 ## Hard constraints (the owner's requirements, do not violate)
 - **License is PolyForm Strict 1.0.0** (personal, non-commercial use; no redistribution or derivatives without permission). Don't change it, and don't add dependencies whose licenses conflict (GPL code can't be merged in; LGPL can only be bundled unmodified as a separate file, like vendor/lame.min.js).
@@ -31,6 +31,7 @@ extension/                   Chrome MV3 extension (no build step, plain JS)
                              <video> (owner wants translation only there); "panel" = shadow-DOM box: history (newest at bottom, scrollback, "↓ new"), LIVE line,
                              resize grip, compact mode, A−/A+, bg opacity, "CC" pill, learning-mode word colors
   mic.html / mic.js          one-time microphone permission + device picker (offscreen docs can't prompt)
+  langs.js                   subtitle languages (TARGETS, same as server translate.TARGETS), ALIGNED (word colors), RTL
   sites.js                   pure site memory + auto-start rules (exact host or *.wildcard); tested by extension/tests
   transcript.js              pure transcript formatters (md/srt/txt/json) + data: URL; tested by extension/tests
   webm-duration.js           inserts the Duration Chrome's MediaRecorder leaves out of WebM; tested by extension/tests
@@ -43,7 +44,7 @@ extension/                   Chrome MV3 extension (no build step, plain JS)
                              learn, display (panel|subtitles), saveMode (off|manual|auto), saveFormat (md|srt|txt|json),
                              saveTranscript, saveAudio, audioFormat (mp3|webm)
 server/
-  server.py                  WebSocket ws://127.0.0.1:8765/<label>?engine=<auto|google|yandex|yandex-nmt>&hide_en=<0|1>&learn=<0|1>
+  server.py                  WebSocket ws://127.0.0.1:8765/<label>?engine=<auto|google|yandex|yandex-nmt>&target=<en|es|…>&hide_en=<0|1>&learn=<0|1>
                              (writes nothing to disk unless started with --save-transcripts)
   engine.py                  Silero VAD, GigaAM-v3 (final RU text), streaming Zipformer (live partial text),
                              looks_english() text check, Whisper-tiny (only for sentences spoken in English)
@@ -57,6 +58,8 @@ docs/research.md             initial market/tech research
 ```
 
 ## Protocol (server → client JSON)
+The field `en` always holds the **translation in the chosen target language**, whatever that language is. The name is
+historical. For `lang:"en"` finals with a non-English target, `ru` holds the original English that was said.
 - `{"type":"ready"}`
 - `{"type":"partial","ru":"…","en":"…","align":[…]}`: live text while the speaker talks (rough; align only in learning mode)
 - learning mode finals also carry `"words": [[ruStart, ruLen, lemma], …]` (for "color only new words")
@@ -73,10 +76,14 @@ cd server && .venv/bin/python -m pytest -q tests   # unit tests (install pytest 
 uv run --no-project --with websockets --with soundfile --with numpy python server/dev/test_client.py some16k.wav
 node --check extension/*.js                  # syntax check the extension
 node --test extension/tests/*.test.mjs       # transcript formatter tests
+uv run --no-project --with websockets python extension/tests/e2e_headless.py some16k-ru.wav ws://127.0.0.1:8765 es
+                                             # full pipeline headless (fake mic → server → overlay → saved files)
 ```
 Load the extension: `chrome://extensions` → Developer mode → Load unpacked → `extension/`.
 
 ## Gotchas learned the hard way
+- **Target languages:** Auto order is `RANKED` (owner's choice) for English and `RANKED_OTHER` (Google first) for others. Learning-mode alignment is requested only for `ALIGNED` targets; others use the normal chain. Keep `TARGETS`/`ALIGNED` in `translate.py` and `extension/langs.js` identical.
+- In zsh, `$var` is not word-split: use `${=var}` when looping over argument strings in test scripts.
 - **The server loads speech models lazily.** GigaAM loads on the first client (`load_final()`, ~1.5 s) and Whisper on the first English sentence. Both are freed `--unload-after` seconds (default 300) after the last client leaves, followed by `malloc_trim(0)`; without it, glibc keeps ~350 MB. Everything happens on `asr_pool`, so a reload is ordered after an unload.
 - **The server refuses WebSocket connections whose `Origin` isn't `chrome-extension://…`.** Browsers apply no CORS to WebSockets, so any web page could otherwise use the local server. Local tools send no Origin and are allowed.
 - **No always-on site access (Chrome Web Store review).**

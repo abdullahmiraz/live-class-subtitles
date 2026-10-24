@@ -37,6 +37,19 @@
   .pane { display: none; }
   .pane.active { display: block; }
   .pane > fieldset:first-child { margin-top: 6px; }
+  /* ⓘ info icons: one shared tooltip (#tip), placed by popup.js so it never leaves the popup */
+  .i { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; margin-left: 5px;
+    border: 1px solid #9aa0a6; border-radius: 50%; color: #5f6368; font: 600 9px/1 Georgia, serif; font-style: italic;
+    cursor: help; vertical-align: 1px; flex: none; }
+  .i:hover, .i:focus { border-color: #1a73e8; color: #1a73e8; outline: none; }
+  #tip { position: fixed; z-index: 10; max-width: 230px; padding: 7px 9px; border-radius: 6px; background: #202124; color: #fff;
+    font-size: 12px; line-height: 1.4; box-shadow: 0 2px 8px rgba(0,0,0,.25); pointer-events: none; opacity: 0; transition: opacity .12s; }
+  #tip.on { opacity: 1; }
+  .lbl { display: inline-flex; align-items: center; }
+  html { overflow-x: hidden; }
+  .soon { border: 1px solid #ddd; border-radius: 6px; margin: 10px 0 0; padding: 6px 10px; }
+  .soon summary { font-weight: 600; cursor: pointer; }
+  .soon ul { margin: 4px 0 0; padding-left: 18px; color: #555; font-size: 12px; line-height: 1.6; }
 </style>
 <h1>RU → EN Live Subtitles</h1>
 <button id="toggle">Start on this tab</button>
@@ -49,7 +62,10 @@
 
 <!-- Basic: everything used day to day -->
 <section class="pane active" id="pane-basic">
-  <label>Display
+  <label><span class="lbl">Translate to<span class="i" tabindex="0" data-tip="The language of the subtitles. Speech is always Russian. Word colors (learning) work for most European and Central Asian languages; others show plain text.">i</span></span>
+    <select id="target"></select>
+  </label>
+  <label><span class="lbl">Display<span class="i" tabindex="0" data-tip="Panel: a box with the history in both languages. Subtitles: only the translation, over the video, like YouTube captions.">i</span></span>
     <select id="display">
       <option value="panel">Panel (history)</option>
       <option value="subtitles">Subtitles (like YouTube)</option>
@@ -57,20 +73,21 @@
   </label>
   <label>Font size <input id="fontSize" type="number" min="12" max="48" /></label>
   <label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
-  <label title="Subtitle mode: a dark band behind the text, or an outline only (see-through)">Caption style
+  <label><span class="lbl">Caption style<span class="i" tabindex="0" data-tip="For Subtitles mode: a dark band behind the text, or only an outline so you can see the video through it. Pick a text color.">i</span></span>
     <span><select id="capStyle" style="width:72px"><option value="band">Band</option><option value="outline">Outline</option></select>
     <select id="capColor" style="width:66px" title="Text color">
       <option value="#ffffff">White</option><option value="#ffe14d">Yellow</option>
       <option value="#7fe7ff">Cyan</option><option value="#9dff9d">Green</option></select></span></label>
   <label>Show Russian text <input id="showRu" type="checkbox" /></label>
-  <label title="Hide the rough live line; show finished sentences only">Final sentences only <input id="finalOnly" type="checkbox" /></label>
-  <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
-  <label title="Learning mode: each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex classic (it provides the word matching).">Color-match words (learning) <input id="learn" type="checkbox" /></label>
-  <label title="When this site starts playing sound, offer one-key start (Chrome requires a click or the shortcut to capture a tab). Manage all sites in Advanced.">
-    <span>Auto-start on <b id="curHost">this site</b></span><input id="autoHere" type="checkbox" /></label>
+  <label><span class="lbl">Final sentences only<span class="i" tabindex="0" data-tip="Hides the rough text shown while someone is still talking. You see each sentence once it's finished and accurate (a second later).">i</span></span> <input id="finalOnly" type="checkbox" /></label>
+  <label><span class="lbl">Hide sentences spoken in English<span class="i" tabindex="0" data-tip="When the teacher switches to English, those sentences are not shown. Russian sentences with a few English words are always kept.">i</span></span> <input id="hideEn" type="checkbox" /></label>
+  <label><span class="lbl">Color-match words (learning)<span class="i" tabindex="0" data-tip="Each Russian word and its translation get the same color, so you see which word means what. Hover a word to highlight its pair.">i</span></span> <input id="learn" type="checkbox" /></label>
+  <div id="learnHint" class="hint" style="margin:-4px 0 4px"></div>
+  <label>
+    <span class="lbl"><span>Auto-start on <b id="curHost">this site</b></span><span class="i" tabindex="0" data-tip="When this site starts playing sound, a small prompt offers to start subtitles with one key. Chrome asks you once to allow this site. Manage all sites in Advanced.">i</span></span><input id="autoHere" type="checkbox" /></label>
   <fieldset>
     <legend>Record this class</legend>
-    <label>Mode
+    <label><span class="lbl">Mode<span class="i" tabindex="0" data-tip="Off: nothing is saved. Manual: Start recording / Stop &amp; save. Auto: every session is saved when subtitles stop. Files go to Downloads/ru-en-subtitles/.">i</span></span>
       <select id="saveMode">
         <option value="off">Off</option>
         <option value="manual">Manual (start / stop)</option>
@@ -85,7 +102,7 @@
         <option value="json">JSON (.json)</option>
       </select>
     </label>
-    <label title="The audio. With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio</span>
+    <label><span class="lbl"><input id="saveAudio" type="checkbox" /> Audio<span class="i" tabindex="0" data-tip="Records the class audio. MP3 plays on any device (~22 MB per hour); WebM is smaller (~15 MB per hour). An .srt transcript plays with it as subtitles in VLC.">i</span></span>
       <select id="audioFormat">
         <option value="mp3" title="Plays on any device, ~22 MB per hour">MP3 (any device)</option>
         <option value="webm" title="Smallest files, ~15 MB per hour">WebM (smallest)</option>
@@ -101,7 +118,7 @@
 <section class="pane" id="pane-advanced">
   <fieldset>
     <legend>Audio source</legend>
-    <label>Listen to
+    <label><span class="lbl">Listen to<span class="i" tabindex="0" data-tip="This tab: the sound of the class tab (online classes). Microphone: for in-person classes or apps outside Chrome. Needs a one-time setup.">i</span></span>
       <select id="audioSource">
         <option value="tab" title="Online class: the sound of this tab">This tab</option>
         <option value="mic" title="In-person class or apps outside Chrome">Microphone</option>
@@ -111,7 +128,7 @@
   </fieldset>
   <fieldset>
     <legend>Translation</legend>
-    <label>Translator
+    <label><span class="lbl">Translator<span class="i" tabindex="0" data-tip="Auto: Yandex classic first for English, Google first for other languages. If one fails, the next takes over by itself. All are free, no account.">i</span></span>
       <select id="engine">
         <option value="auto" title="Yandex classic → Google → Yandex LLM">Auto (best order)</option>
         <option value="yandex-nmt">Yandex (classic)</option>
@@ -121,7 +138,7 @@
     </label>
   </fieldset>
   <fieldset>
-    <legend>Check</legend>
+    <legend class="lbl">Check<span class="i" tabindex="0" data-tip="Checks that the local server is running and that each translator answers, with how long each takes.">i</span></legend>
     <button id="testBtn" style="background:#5f6368">Test server + translators</button>
     <div id="testOut" class="hint" style="white-space:pre-line"></div>
   </fieldset>
@@ -137,10 +154,10 @@
 <section class="pane" id="pane-extra">
   <fieldset>
     <legend>Learn while you listen</legend>
-    <label title="Hover any Russian word: dictionary form, grammar (case, tense…) and meaning, with Save / I know it">Word card on hover <input id="hoverCard" type="checkbox" /></label>
-    <label title="With Color-match words: only words you haven't marked “I know it” get colors">Color only new words <input id="newOnly" type="checkbox" /></label>
-    <label title="Russian shown first; the English stays blurred until you hover (or 6 s later). Try to understand before peeking.">Russian first (English blurred) <input id="ruFirst" type="checkbox" /></label>
-    <label title="Speaks each finished English sentence with your browser's free voices; the class audio is lowered while it speaks">Read translation aloud <input id="readAloud" type="checkbox" /></label>
+    <label><span class="lbl">Word card on hover<span class="i" tabindex="0" data-tip="Hover any Russian word: its dictionary form, grammar (case, tense…) and meaning. ★ Save it to your vocabulary or mark ✓ I know it.">i</span></span> <input id="hoverCard" type="checkbox" /></label>
+    <label><span class="lbl">Color only new words<span class="i" tabindex="0" data-tip="With Color-match words on: words you marked “I know it” stay plain, in every form, so new words stand out.">i</span></span> <input id="newOnly" type="checkbox" /></label>
+    <label><span class="lbl">Russian first (translation blurred)<span class="i" tabindex="0" data-tip="Practice: the translation stays blurred until you hover it, or for 6 seconds. Try to understand the Russian first.">i</span></span> <input id="ruFirst" type="checkbox" /></label>
+    <label><span class="lbl">Read translation aloud<span class="i" tabindex="0" data-tip="Reads each finished sentence aloud with your browser's free voices, in the subtitle language. The class audio gets quieter while it speaks.">i</span></span> <input id="readAloud" type="checkbox" /></label>
   </fieldset>
   <fieldset>
     <legend>Vocabulary</legend>
@@ -151,8 +168,21 @@
     </div>
     <div id="knownInfo" class="hint"></div>
   </fieldset>
+  <details class="soon">
+    <summary>Coming soon</summary>
+    <ul>
+      <li>More spoken languages (not only Russian)</li>
+      <li>Two subtitle languages at once</li>
+      <li>Stress marks on Russian words (замо́к / зáмок)</li>
+      <li>Class summary: key words and a short outline</li>
+      <li>Who-said-what labels in transcripts</li>
+      <li>Lite mode for older, low-memory PCs</li>
+    </ul>
+    <div class="hint" style="margin-top:4px">Ideas or bugs? <a href="https://github.com/abdullahmiraz/ru-en-live-subtitles/issues" target="_blank">Tell us on GitHub</a></div>
+  </details>
 </section>
 
+<div id="tip" role="tooltip"></div>
 <div class="srv">Local server: <span id="srv">checking…</span></div>
 <div class="hint">Shortcut: <span id="shortcut">Alt+Shift+Y</span> · <a id="shortcuts">change</a></div>
 <script src="popup.js" type="module"></script>

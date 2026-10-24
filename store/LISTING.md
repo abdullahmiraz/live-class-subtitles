@@ -8,13 +8,13 @@ Upload: `./package.sh` → `dist/ru-en-live-subtitles-<version>.zip` →
 **Name** (from manifest): RU→EN Live Subtitles
 
 **Summary** (manifest `description`, max 132 chars):
-> Live Russian→English subtitles for any tab. Speech recognition runs on your own PC.
+> Live subtitles for Russian audio in any tab: English or 37 other languages. Speech recognition runs on your own PC.
 
 **Category:** Education · **Language:** English
 
 **Description:**
 ```
-Live English subtitles for Russian audio in any Chrome tab: online classes, lectures, Zoom/Meet in the browser, YouTube, podcasts.
+Live subtitles for Russian audio in any Chrome tab (online classes, lectures, Zoom/Meet in the browser, YouTube, podcasts) in English or 37 other languages: Spanish, German, French, Arabic, Hindi, Bengali, Urdu, Turkish, Chinese, Kazakh, Uzbek and more.
 
 Free. No account. No API keys. Your audio never leaves your computer.
 
@@ -39,6 +39,7 @@ After installing, a setup page shows a one-line command that installs the compan
 
 Requires: Linux desktop with Chrome 116+. Source, help and issues: https://github.com/abdullahmiraz/ru-en-live-subtitles
 Made by Abdullah Miraz: https://www.miraz.dev/about
+Questions or ideas: https://github.com/abdullahmiraz/ru-en-live-subtitles/issues (or LinkedIn: https://www.linkedin.com/in/abdullahmiraz/)
 ```
 
 **Graphics** (in `store/`):
@@ -52,7 +53,7 @@ Made by Abdullah Miraz: https://www.miraz.dev/about
 ## Privacy tab
 
 **Single purpose:**
-> Show live English subtitles (translation) for Russian speech playing in a browser tab.
+> Show live subtitles (a translation into the user's language) for Russian speech playing in a browser tab.
 
 **Permission justifications:**
 | Permission | Justification |

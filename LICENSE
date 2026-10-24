@@ -4,7 +4,8 @@ This software is source-available for PERSONAL, NON-COMMERCIAL use only, under t
 License 1.0.0 below. You may use it for yourself. You may NOT redistribute it, publish modified
 versions, build other products or services on it, or use it commercially, without the copyright
 holder's prior written permission. To ask for permission or a commercial license, open an issue at
-https://github.com/abdullahmiraz/ru-en-live-subtitles/issues.
+https://github.com/abdullahmiraz/ru-en-live-subtitles/issues or message the author on LinkedIn:
+https://www.linkedin.com/in/abdullahmiraz/
 
 Third-party components keep their own licenses: extension/vendor/lame.min.js is LGPL-3.0 (see
 extension/vendor/LAMEJS-LICENSE.txt), and the speech models downloaded by server/download_models.sh

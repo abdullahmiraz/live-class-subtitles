@@ -1,7 +1,7 @@
 """Local live-translation server.
 
 Clients (the Chrome extension, or dev/test_client.py) connect to
-ws://127.0.0.1:8765/<label>?engine=<auto|yandex-nmt|google|yandex>&hide_en=<0|1>&learn=<0|1>
+ws://127.0.0.1:8765/<label>?engine=<auto|yandex-nmt|google|yandex>&target=<en|es|…>&hide_en=<0|1>&learn=<0|1>
 and stream 16 kHz mono Int16 PCM (binary frames). Text frame "flush" = finish the sentence in progress;
 the server answers {"type": "done"} once every pending sentence has been sent. Server -> client JSON:
   {"type": "partial", "ru": "...", "en": "...", "align": [...]}   rough live text while someone is speaking
@@ -30,7 +30,7 @@ import websockets
 
 from engine import GIGAAM, SAMPLE_RATE, EnglishASR, FinalASR, PartialASR, looks_english, make_vad
 from lookup import lemmas, lookup
-from translate import ENGINES, translate_chain, yandex_aligned
+from translate import ALIGNED, ENGINES, target, translate_chain, yandex_aligned
 
 FINAL_MODEL_OK = (GIGAAM / "encoder.int8.onnx").exists()
 VAD_WINDOW = 512  # samples, required by Silero VAD at 16 kHz
@@ -87,8 +87,8 @@ def schedule_unload():
 
 
 class Session:
-    def __init__(self, ws, label, chain, hide_en=False, learn=False):
-        self.ws, self.chain, self.hide_en, self.learn = ws, chain, hide_en, learn
+    def __init__(self, ws, label, chain, hide_en=False, learn=False, tl="en"):
+        self.ws, self.chain, self.hide_en, self.learn, self.tl = ws, chain, hide_en, learn, tl
         self.vad = self.partial = None  # created on asr_pool in init()
         self.buf = np.zeros(0, dtype=np.float32)
         self.speaking = False
@@ -199,14 +199,14 @@ class Session:
     async def translate_partial(self, text, gen):
         loop = asyncio.get_running_loop()
         en, align = "", []
-        if self.learn:  # learning mode: color the live line too (word alignment from Yandex classic)
+        if self.learn and self.tl in ALIGNED:  # learning mode: color the live line too (word alignment from Yandex classic)
             try:
-                en, align = await loop.run_in_executor(pool, yandex_aligned, text)
+                en, align = await loop.run_in_executor(pool, yandex_aligned, text, self.tl)
             except Exception:
                 pass
         if not en:
             align = []
-            en, _ = await loop.run_in_executor(pool, translate_chain, self.chain, text)
+            en, _ = await loop.run_in_executor(pool, translate_chain, self.chain, text, self.tl)
         if gen == self.gen and en:
             self.partial_en, self.partial_align, self.partial_src = en, align, text
             await self.send(type="partial", ru=text, en=en, align=align)
@@ -244,20 +244,25 @@ class Session:
                 print(f"[{stamp}] dropped unclear sentence [GigaAM heard: {ru[:80]}] [Whisper: {en[:40]}]", flush=True)
                 await self.send(type="partial", ru="", en="")
                 return
-            await self.send(type="final", ru="", en=en, lang="en", start=round(start, 2), end=round(end, 2), engine="whisper")
+            said, engine = "", "whisper"
+            if self.tl != "en":  # another target language: translate what was said in English, keep the original
+                said = en
+                en, used = await loop.run_in_executor(pool, translate_chain, self.chain, said, self.tl, "en")
+                en, engine = (en, f"whisper+{used}") if en else (said, "whisper")
+            await self.send(type="final", ru=said, en=en, lang="en", start=round(start, 2), end=round(end, 2), engine=engine)
             self.write_log(f"**[{stamp}]** {en}  \n<sub>(spoken in English)</sub>\n\n")
             print(f"[{stamp}] (English) {en}   [GigaAM heard: {ru[:80]}]", flush=True)
             return
         en, used, align = "", "", []
-        if self.learn:  # learning mode: Yandex classic gives word alignment for the color matching
+        if self.learn and self.tl in ALIGNED:  # learning mode: Yandex classic gives word alignment for the color matching
             try:
-                en, align = await loop.run_in_executor(pool, yandex_aligned, ru)
+                en, align = await loop.run_in_executor(pool, yandex_aligned, ru, self.tl)
                 used = "yandex-nmt"
             except Exception as e:
                 print(f"[translate] aligned yandex failed ({e}); normal translation", flush=True)
         if not en:
             align = []  # alignment only belongs to the text it came with
-            en, used = await loop.run_in_executor(pool, translate_chain, self.chain, ru)
+            en, used = await loop.run_in_executor(pool, translate_chain, self.chain, ru, self.tl)
         words = lemmas(ru) if self.learn else []  # dictionary forms, so "known words" match every form
         await self.send(type="final", ru=ru, en=en, lang="ru", start=round(start, 2), end=round(end, 2), engine=used,
                         align=align, words=words)
@@ -293,7 +298,7 @@ async def handler(ws):
         loop = asyncio.get_running_loop()
         try:
             if label == "lookup":
-                res = await loop.run_in_executor(pool, lookup, q.get("w", [""])[0][:60])
+                res = await loop.run_in_executor(pool, lookup, q.get("w", [""])[0][:60], target(q.get("target", ["en"])[0]))
             else:
                 res = await loop.run_in_executor(pool, selftest)
             await ws.send(json.dumps(res, ensure_ascii=False))
@@ -305,9 +310,10 @@ async def handler(ws):
     chain = q.get("engine", ["auto"])[0]
     hide_en = q.get("hide_en", ["0"])[0] == "1"
     learn = q.get("learn", ["0"])[0] == "1"
-    print(f"client connected: {label} (engine={chain}, hide English={hide_en}, learning mode={learn})", flush=True)
+    tl = target(q.get("target", ["en"])[0])
+    print(f"client connected: {label} (engine={chain}, to={tl}, hide English={hide_en}, learning mode={learn})", flush=True)
     global sessions
-    s = Session(ws, label, chain, hide_en, learn)
+    s = Session(ws, label, chain, hide_en, learn, tl)
     sessions += 1
     if unload_timer:
         unload_timer.cancel()

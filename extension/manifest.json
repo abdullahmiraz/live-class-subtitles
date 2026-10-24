@@ -3,7 +3,7 @@
   "name": "RU→EN Live Subtitles",
   "version": "1.6.0",
   "minimum_chrome_version": "116",
-  "description": "Live Russian→English subtitles for any tab. Speech recognition runs on your own PC.",
+  "description": "Live subtitles for Russian audio in any tab: English or 37 other languages. Speech recognition runs on your own PC.",
   "homepage_url": "https://github.com/abdullahmiraz/ru-en-live-subtitles",
   "permissions": [
     "tabCapture",

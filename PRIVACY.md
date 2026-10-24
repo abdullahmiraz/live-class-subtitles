@@ -27,4 +27,4 @@ receives nothing: there are no accounts, analytics, ads or tracking.
 - **downloads**: save recordings and transcripts you asked for.
 
 ## Contact
-Questions: open an issue at <https://github.com/abdullahmiraz/ru-en-live-subtitles/issues>.
+Questions: open an issue at <https://github.com/abdullahmiraz/ru-en-live-subtitles/issues>, or message Abdullah Miraz on LinkedIn: <https://www.linkedin.com/in/abdullahmiraz/>.

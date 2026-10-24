@@ -1,7 +1,8 @@
-import { toAnki } from "./transcript.js";
+import { dataUrl, toAnki } from "./transcript.js";
 import { originsFor } from "./sites.js";
+import { ALIGNED, TARGETS, langName } from "./langs.js";
 const DEFAULTS = {
-  server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
+  server: "ws://127.0.0.1:8765", engine: "auto", target: "en", showRu: true, hideEn: false, fontSize: 26,
   saveMode: "off", saveFormat: "md", saveTranscript: true, saveAudio: false, audioFormat: "mp3", learn: false, bgOpacity: 0.88, display: "panel",
   finalOnly: false, capStyle: "band", capColor: "#ffffff", audioSource: "tab", micId: "",
   readAloud: false, ruFirst: false, hoverCard: true, newOnly: false,
@@ -23,6 +24,26 @@ document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => showTab(t.da
 chrome.storage.local.get("popupTab").then((r) => r.popupTab && showTab(r.popupTab));
 $("shortcuts").onclick = () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
 
+// ⓘ icons: one shared tooltip, kept inside the popup
+const tip = $("tip");
+function showTip(el) {
+  tip.textContent = el.dataset.tip;
+  const r = el.getBoundingClientRect(), w = Math.min(230, document.body.clientWidth - 8);
+  tip.style.maxWidth = w + "px";
+  tip.classList.add("on");
+  const t = tip.getBoundingClientRect();
+  tip.style.left = Math.max(4, Math.min(r.left - 20, document.documentElement.clientWidth - t.width - 4)) + "px";
+  tip.style.top = (r.bottom + 6 + t.height < innerHeight ? r.bottom + 6 : Math.max(4, r.top - t.height - 6)) + "px";
+}
+document.querySelectorAll(".i").forEach((el) => {
+  el.onmouseenter = el.onfocus = () => showTip(el);
+  el.onmouseleave = el.onblur = () => tip.classList.remove("on");
+  el.onclick = (e) => e.preventDefault(); // inside a <label>: don't toggle the checkbox
+});
+
+$("target").replaceChildren(...Object.entries(TARGETS).map(([code, name]) => new Option(name, code)));
+$("target").value = settings.target;
+if (!$("target").value) $("target").value = settings.target = "en";
 $("engine").value = settings.engine;
 if (!$("engine").value) $("engine").value = settings.engine = "auto"; // e.g. removed "argos" option
 $("fontSize").value = settings.fontSize;
@@ -37,6 +58,12 @@ $("learn").checked = settings.learn;
 $("display").value = settings.display;
 for (const id of ["capStyle", "capColor", "audioSource"]) $(id).value = settings[id];
 for (const id of ["finalOnly", "readAloud", "ruFirst", "hoverCard", "newOnly"]) $(id).checked = !!settings[id];
+// word colors need Yandex word matching, which only some languages get
+const learnHint = () => {
+  $("learnHint").textContent = settings.learn && !ALIGNED.has(settings.target)
+    ? `Word colors aren't available for ${langName(settings.target)}; word cards still work.` : "";
+};
+learnHint();
 $("bgOpacity").value = Math.round(settings.bgOpacity * 100);
 $("bgOpacityVal").textContent = $("bgOpacity").value + "%";
 
@@ -138,19 +165,27 @@ $("addBtn").onclick = () => {
 };
 // ---------- Advanced: microphone setup, Test ----------
 $("micSetup").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("mic.html") });
+function offline(text) { // the companion isn't reachable: point to the setup page
+  $("testOut").innerHTML = "";
+  const a = Object.assign(document.createElement("a"), { textContent: "how to set it up" });
+  a.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  $("testOut").append(text + " · ", a);
+}
 $("testBtn").onclick = () => {
   $("testOut").textContent = "testing…";
   const ws = new WebSocket(settings.server + "/selftest");
-  const t = setTimeout(() => { $("testOut").textContent = "✗ local server not answering — run ./start.sh"; ws.close(); }, 15000);
+  const t = setTimeout(() => { offline("✗ local server not answering"); ws.close(); }, 15000);
   ws.onmessage = (e) => {
     clearTimeout(t);
     const d = JSON.parse(e.data);
-    const lines = [`✓ local server · speech recognition ${d.speech === "ok" ? "✓" : "✗"}`];
+    const speech = String(d.speech || "");
+    const lines = [`✓ local server · speech recognition ${speech.startsWith("ok") ? "✓" + (speech.includes("loads") ? " (loads on Start)" : "") : "✗ " + speech}`];
+    const NAMES = { "yandex-nmt": "Yandex classic", google: "Google", yandex: "Yandex LLM" };
     for (const [name, r] of Object.entries(d.translators || {}))
-      lines.push(`${r.ok ? "✓" : "✗"} ${name} ${r.ok ? r.ms + " ms" : "— " + (r.error || "failed")}`);
+      lines.push(`${r.ok ? "✓" : "✗"} ${NAMES[name] || name} ${r.ok ? r.ms + " ms" : "— " + (r.error || "failed")}`);
     $("testOut").textContent = lines.join("\n");
   };
-  ws.onerror = () => { clearTimeout(t); $("testOut").textContent = "✗ local server not running — start it with ./start.sh"; };
+  ws.onerror = () => { clearTimeout(t); offline("✗ local server not running"); };
 };
 
 // ---------- Extra: vocabulary ----------
@@ -165,7 +200,7 @@ async function refreshVocab() {
 }
 $("ankiBtn").onclick = async () => {
   const { vocab = [] } = await chrome.storage.local.get("vocab");
-  const url = URL.createObjectURL(new Blob([toAnki(vocab)], { type: "text/plain;charset=utf-8" }));
+  const url = dataUrl(toAnki(vocab), "text/plain"); // a blob: URL could die with the popup before the download starts
   await chrome.downloads.download({ url, filename: `ru-en-subtitles/vocabulary_${new Date().toISOString().slice(0, 10)}.txt`, conflictAction: "uniquify" });
   $("vocabInfo").textContent += " · exported ✓ (Anki: File → Import)";
 };
@@ -198,7 +233,7 @@ $("toggle").onclick = async () => {
   refresh();
 };
 
-for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "audioFormat", "learn", "display",
+for (const id of ["target", "engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "audioFormat", "learn", "display",
   "capStyle", "capColor", "finalOnly", "audioSource", "readAloud", "ruFirst", "hoverCard", "newOnly"]) {
   $(id).onchange = async () => {
     let v = $(id).type === "checkbox" ? $(id).checked : $(id).value;
@@ -206,6 +241,7 @@ for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFor
     settings[id] = v;
     await chrome.storage.sync.set({ [id]: v });
     bg({ type: "settings", settings: { [id]: v } }); // only what changed (the box may have changed others)
+    learnHint();
     refresh();
   };
 }

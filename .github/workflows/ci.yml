@@ -15,7 +15,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r server/requirements.txt pytest
       - run: python -m pytest -q server/tests
-      - run: python -m py_compile server/*.py server/dev/*.py store/*.py
+      - run: python -m py_compile server/*.py server/dev/*.py store/*.py extension/tests/*.py
 
   extension:
     runs-on: ubuntu-latest

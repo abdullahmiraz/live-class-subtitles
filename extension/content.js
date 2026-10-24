@@ -23,14 +23,14 @@
 
   const MIN_W = 320, MIN_H = 120, MAX_HISTORY = 300;
   let host, root, box, histEl, liveEn, liveRu, liveWrap, statusEl, newBtn;
-  let settings = { showRu: true, fontSize: 22, bgOpacity: 0.88, display: "panel", finalOnly: false, capStyle: "band",
+  let settings = { target: "en", showRu: true, fontSize: 22, bgOpacity: 0.88, display: "panel", finalOnly: false, capStyle: "band",
     capColor: "#ffffff", ruFirst: false, hoverCard: true, newOnly: false, readAloud: false, learn: false };
   // words marked "I know it" (dictionary forms), kept in chrome.storage.local and shared by all tabs
   let known = new Set();
   chrome.storage.local.get("known").then((r) => (known = new Set(r.known || [])));
   chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.known) known = new Set(ch.known.newValue || []); });
   let ui = { compact: false, w: null, h: null, left: null, top: null }; // per-site, chrome.storage.local
-  let live = false, saving = null, savedTimer, hideTimer, unseen = 0, stick = true, startedAt = null;
+  let live = false, saving = null, savedMsg = "", errMsg = "", savedTimer, hideTimer, unseen = 0, stick = true, startedAt = null;
   const KEY = "ui:" + location.host;
 
   const CSS = `
@@ -59,7 +59,7 @@
     @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
     .item:hover { opacity: .95; }
     .t { font-size: .55em; color: #8a93a6; padding-top: .45em; font-variant-numeric: tabular-nums; }
-    .en { font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 2px #000; user-select: text; }
+    .en { unicode-bidi: plaintext; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 2px #000; user-select: text; }
     .ru { font-size: .68em; color: #c3cad6; margin-top: 2px; user-select: text; text-shadow: 0 1px 2px #000; }
     .ru.said-en { font-style: italic; color: #9fb4d8; }
     .live { flex: none; padding: 6px 12px 9px; border-top: 1px dashed rgba(255,255,255,.18); background: rgba(76,141,255,.06); }
@@ -301,7 +301,7 @@
     renderCapStatus();
     if (!statusEl) return;
     const rec = saving && [saving.audio && "audio", saving.transcript && `${saving.count} lines`].filter(Boolean).join(" + ");
-    statusEl.textContent = (live ? "● live" : "server offline — run start.sh") + (saving ? `  ·  ⏺ recording ${rec}` : "");
+    statusEl.textContent = (live ? "● live" : "server offline · open the extension popup for setup") + (saving ? `  ·  ⏺ recording ${rec}` : "");
     statusEl.style.color = live ? "#8fe58f" : "#ff8f8f";
   }
 
@@ -330,11 +330,11 @@
     it.innerHTML = `<div class="t"></div><div><div class="en"></div><div class="ru"></div></div>`;
     it.querySelector(".t").textContent = fmt(spokenAt - startedAt);
     const ru = it.querySelector(".ru");
-    if (m.lang === "en") { it.querySelector(".en").textContent = m.en; ru.textContent = "spoken in English"; ru.classList.add("said-en"); }
+    if (m.lang === "en") { it.querySelector(".en").textContent = m.en; ru.textContent = m.ru ? `in English: ${m.ru}` : "spoken in English"; ru.classList.add("said-en"); }
     else colorize(it.querySelector(".en"), ru, m);
     histEl.appendChild(it);
     if (settings.ruFirst) setTimeout(() => it.classList.add("reveal"), 6000); // Russian-first: English shows after 6 s
-    if (m.lang !== "en") speak(m.en);
+    if (m.lang !== "en" || (settings.target || "en") !== "en") speak(m.en); // English speech is only re-read once translated
     lastFinal = m; liveCue = null; playFinal(m);
     while (histEl.children.length > MAX_HISTORY) histEl.firstElementChild.remove();
     setLive("", "");
@@ -358,9 +358,10 @@
     .stat { font: 12px/1.4 system-ui, sans-serif; color: #ddd; background: rgba(8,8,8,.7); padding: 2px 8px; border-radius: 10px;
       align-self: center; margin-bottom: 4px; pointer-events: auto; }
     .stat.bad { color: #ffb0b0; }
+    .stat.ok { color: #9ff0a8; }
     .cue.now .txt { font-weight: 500; }
     .ru { font-size: .66em; color: #e8e2c0; }
-    .cap .txt .en { color: var(--cap-color, #fff); }
+    .cap .txt .en { color: var(--cap-color, #fff); unicode-bidi: plaintext; }
     .cap.outline .cue span.txt { background: transparent;
       text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000, -1px -1px 2px #000, 0 2px 4px rgba(0,0,0,.8); }
     .cap.ruf .en { filter: blur(6px); transition: filter .35s; }
@@ -442,7 +443,7 @@
     d.className = "cue " + cls;
     d.innerHTML = `<span class="txt"><span class="en"></span>${showRu ? `<br><span class="ru"></span>` : ""}</span>`;
     const en = d.querySelector(".en"), ru = d.querySelector(".ru") || document.createElement("span");
-    if (c.lang === "en") { en.textContent = c.en; ru.textContent = "(spoken in English)"; }
+    if (c.lang === "en") { en.textContent = c.en; ru.textContent = c.ru ? `(in English) ${c.ru}` : "(spoken in English)"; }
     else colorize(en, ru, c); // learning mode: colored words; Russian words are hoverable
     return d;
   }
@@ -536,11 +537,11 @@
   function renderCapStatus() {
     if (!capRoot) return;
     const row = capRoot.querySelector(".statrow");
-    const msg = !live ? "server offline — run start.sh" : saving ? "⏺ recording" : !lastFinal && !liveCue ? "● listening…" : "";
+    const msg = errMsg || !live ? errMsg || "server offline · open the extension popup for setup" : savedMsg || (saving ? "⏺ recording" : !lastFinal && !liveCue ? "● listening…" : "");
     row.replaceChildren();
     if (msg) {
       const d = document.createElement("span");
-      d.className = "stat" + (!live ? " bad" : "");
+      d.className = "stat" + (!live || errMsg ? " bad" : "") + (savedMsg ? " ok" : "");
       d.textContent = msg;
       row.append(d);
     }
@@ -683,7 +684,7 @@
       <div class="row"><button class="save">★ Save</button><button class="know">✓ I know it</button></div></div>`;
     cardHost.addEventListener("mouseenter", () => clearTimeout(cardHide));
     cardHost.addEventListener("mouseleave", () => (cardHide = setTimeout(hideCard, 250)));
-    (document.fullscreenElement && !/^(VIDEO|IFRAME)$/.test(document.fullscreenElement.tagName) ? document.fullscreenElement : document.documentElement).appendChild(cardHost);
+    attach(cardHost); // also above a fullscreen video
     const rect = wEl.getBoundingClientRect();
     const place = () => {
       const c = cardHost && cardHost.getBoundingClientRect();
@@ -693,10 +694,11 @@
       cardHost.style.top = (above > 4 ? above : rect.bottom + 8) + "px";
     };
     place();
-    if (!lookups.has(word)) lookups.set(word, chrome.runtime.sendMessage({ target: "background", type: "lookup", word }).catch(() => ({ error: "offline" })));
-    lookups.get(word).then((info) => {
+    const key = word + "|" + (settings.target || "en"); // meanings come in the subtitle language
+    if (!lookups.has(key)) lookups.set(key, chrome.runtime.sendMessage({ target: "background", type: "lookup", word }).catch(() => ({ error: "offline" })));
+    lookups.get(key).then((info) => {
       if (!cardHost || cardWord !== word) return;
-      if (!info || info.error) { lookups.delete(word); r.querySelector(".gram").textContent = "lookup needs the local server"; return; }
+      if (!info || info.error) { lookups.delete(key); r.querySelector(".gram").textContent = "lookup needs the local server"; return; }
       r.querySelector(".lemma").textContent = info.lemma || word;
       r.querySelector(".form").textContent = info.lemma && info.lemma !== word ? `(${word})` : "";
       r.querySelector(".gram").textContent = info.grammar || "";
@@ -730,9 +732,13 @@
     const synth = window.speechSynthesis;
     if (synth.speaking && synth.pending) synth.cancel(); // falling behind the class: skip to the newest sentence
     const u = new SpeechSynthesisUtterance(text);
-    const voice = synth.getVoices().find((v) => /^en(-|_)?(US|GB)?/i.test(v.lang));
-    if (voice) u.voice = voice;
-    u.lang = "en-US";
+    const lang = settings.target || "en"; // a voice for the subtitle language
+    const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().replace("_", "-").split("-")[0] === (lang === "he" ? "he" : lang)
+      || (lang === "he" && /^iw/i.test(v.lang)));
+    const voice = voices.find((v) => lang !== "en" || /US|GB/i.test(v.lang)) || voices[0];
+    if (!voice) return; // no voice for this language in this browser: stay silent rather than read it wrongly
+    u.voice = voice;
+    u.lang = voice.lang;
     u.rate = 1.05;
     const duck = (on) => chrome.runtime.sendMessage({ target: "background", type: "duck", on }).catch(() => {});
     u.onstart = () => duck(true);
@@ -781,7 +787,7 @@
     r.querySelector(".h").textContent = m.host;
     r.querySelector(".later").onclick = () => { chrome.runtime.sendMessage({ target: "background", type: "prompt-snooze" }); hidePrompt(); };
     r.querySelector(".never").onclick = () => { chrome.runtime.sendMessage({ target: "background", type: "prompt-never", pattern: m.rule }); hidePrompt(); };
-    (document.fullscreenElement && !/^(VIDEO|IFRAME)$/.test(document.fullscreenElement.tagName) ? document.fullscreenElement : document.documentElement).appendChild(promptHost);
+    attach(promptHost); // also above a fullscreen video
     promptTimer = setTimeout(hidePrompt, 25000); // don't nag: it goes away by itself
   }
 
@@ -806,10 +812,10 @@
         if (capHost) { capHost.remove(); capHost = null; clearInterval(capTimer); }
         hideCard();
         lastFinal = liveCue = shownFinal = null; finalQueue = []; clearTimeout(finalTimer); finalTimer = null;
-        live = false; saving = null; startedAt = null; stick = true; unseen = 0; ui.hidden = false;
+        live = false; saving = null; errMsg = ""; startedAt = null; stick = true; unseen = 0; ui.hidden = false;
       };
       // just saved a file? keep the box up a moment so the "saved" notice is readable
-      if (statusEl && statusEl.textContent.startsWith("✔")) { setLive("", ""); hideTimer = setTimeout(remove, 5000); }
+      if (savedMsg) { setLive("", ""); hideTimer = setTimeout(remove, 5000); }
       else remove();
     } else if (m.type === "overlay-settings") {
       settings = { ...settings, ...m.settings };
@@ -821,16 +827,18 @@
       if (host) showStatus();
     } else if (m.type === "saved") {
       build();
-      statusEl.textContent = `✔ saved → Downloads/${m.files.map((f) => f.split("/").pop()).join(" + ")}`;
+      savedMsg = `✔ saved → Downloads/${m.files.map((f) => f.split("/").pop()).join(" + ")}`;
+      statusEl.textContent = savedMsg;
       statusEl.style.color = "#8fe58f";
+      renderCapStatus(); // subtitle mode shows it too
       clearTimeout(savedTimer);
-      savedTimer = setTimeout(showStatus, 6000);
+      savedTimer = setTimeout(() => { savedMsg = ""; showStatus(); }, 6000);
     } else if (m.type === "sub") {
       build();
       if (!live && m.kind !== "error") { live = true; showStatus(); } // text is arriving, so we're connected
       if (m.kind === "final") addFinal(m);
       else if (m.kind === "partial") setLive(m.en, m.ru, m.align);
-      else if (m.kind === "error") { statusEl.textContent = m.en; statusEl.style.color = "#ff8f8f"; }
+      else if (m.kind === "error") { errMsg = m.en; statusEl.textContent = m.en; statusEl.style.color = "#ff8f8f"; renderCapStatus(); }
     }
   });
 })();

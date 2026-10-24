@@ -4,7 +4,7 @@ import { FORMATS, dataUrl, fileName, render } from "./transcript.js";
 import { autoRuleFor, forget, neededOrigins, normPattern, originsFor, recordUse, setAuto, sortedSites } from "./sites.js";
 
 const DEFAULTS = {
-  server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
+  server: "ws://127.0.0.1:8765", engine: "auto", target: "en", // subtitle language (see langs.js) showRu: true, hideEn: false, fontSize: 26,
   saveMode: "off", // off | manual | auto
   saveFormat: "md", // md | srt | txt | json
   saveTranscript: true, // what a recording keeps: the transcript (EN + RU)…
@@ -316,7 +316,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         break;
       }
       case "ended": await stop(); break;
-      case "lookup": return reply(await serverRequest("lookup", { w: msg.word }));
+      case "lookup": return reply(await serverRequest("lookup", { w: msg.word, target: (await getSettings()).target }));
       case "duck": toOffscreen({ type: "duck", on: !!msg.on }, 1000); break;
       case "sites-get": {
         const sites = await getSites();
@@ -366,6 +366,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   if (!cur || cur.tabId !== tabId || info.status !== "complete") return;
   await showOverlay(tabId);
   notifySaving(tabId);
+  chrome.action.setBadgeText({ text: "ON", tabId }); // Chrome clears per-tab badges on navigation
 });
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {

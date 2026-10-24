@@ -45,17 +45,17 @@ def analyze(word: str) -> dict:
 
 
 @lru_cache(maxsize=4096)
-def meaning(lemma: str) -> str:
-    """Online part: translation of the dictionary form (cached; same engine order as the subtitles)."""
+def meaning(lemma: str, tl: str = "en") -> str:
+    """Online part: translation of the dictionary form into the subtitle language (cached)."""
     from translate import translate_chain
-    en, _ = translate_chain("auto", lemma)
-    return en
+    out, _ = translate_chain("auto", lemma, tl)
+    return out
 
 
-def lookup(word: str) -> dict:
+def lookup(word: str, tl: str = "en") -> dict:
     info = analyze(word)
     try:
-        info["meaning"] = meaning(info["lemma"]) if info["lemma"] else ""
+        info["meaning"] = meaning(info["lemma"], tl) if info["lemma"] else ""
     except Exception:
         info["meaning"] = ""
     return info

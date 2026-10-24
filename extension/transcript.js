@@ -36,7 +36,8 @@ export function fileName(t, format) {
   return `ru-en-subtitles/${site}_${stamp(t.startedAt)}.${FORMATS[format].ext}`;
 }
 
-const ruLine = (e) => (e.lang === "en" ? "(spoken in English)" : e.ru);
+// spoken in English: with a non-English subtitle language the original English is kept in `ru`
+const ruLine = (e) => (e.lang === "en" ? (e.ru ? `(in English) ${e.ru}` : "(spoken in English)") : e.ru);
 
 export function toMarkdown(t) {
   const head = [
@@ -89,7 +90,7 @@ export function toJson(t) {
         start: +((e.start - t.startedAt) / 1000).toFixed(2),
         end: +((e.end - t.startedAt) / 1000).toFixed(2),
         lang: e.lang,
-        ru: e.lang === "en" ? null : e.ru,
+        ru: e.lang === "en" ? e.ru || null : e.ru,
         en: e.en,
         engine: e.engine,
       })),
@@ -104,7 +105,7 @@ export function toJson(t) {
 export function toAnki(vocab) {
   const clean = (x) => String(x || "").replace(/[\t\n\r]+/g, " ").trim();
   const rows = vocab.map((w) => [w.lemma, w.meaning, w.grammar, w.sentence, w.sentenceEn, new Date(w.ts).toISOString().slice(0, 10)].map(clean).join("\t"));
-  return ["#separator:tab", "#html:false", "#columns:Russian\tEnglish\tGrammar\tExample\tExample (EN)\tDate", ...rows].join("\n") + "\n";
+  return ["#separator:tab", "#html:false", "#columns:Russian\tMeaning\tGrammar\tExample\tExample (translation)\tDate", ...rows].join("\n") + "\n";
 }
 
 export function render(t, format) {
