@@ -4,9 +4,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/server"
 
-if ss -ltn 2>/dev/null | grep -q '127.0.0.1:8765 '; then
+port_busy() { ss -ltn 2>/dev/null | grep -q '127.0.0.1:8765 '; }
+
+# ./start.sh restart  -> stop the running server (e.g. after an update) and start the new code
+if [ "${1:-}" = "restart" ] || [ "${1:-}" = "stop" ]; then
+  pkill -f '^\.venv/bin/python server\.py' || true
+  for _ in $(seq 1 50); do port_busy || break; sleep 0.1; done
+  [ "$1" = "stop" ] && { echo "Stopped."; exit 0; }
+  shift
+fi
+
+if port_busy; then
   echo "The subtitle server is already running (port 8765) — nothing to do."
-  echo "To stop it: pkill -f 'python server.py'"
+  echo "After an update use: ./start.sh restart"
   exit 0
 fi
 

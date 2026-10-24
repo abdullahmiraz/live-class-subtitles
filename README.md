@@ -27,6 +27,7 @@ Requirements: Linux (tested on Ubuntu with PipeWire), Google Chrome 138+, Python
 5. In the box: drag the header to move it, drag the corner to resize, use A−/A+ for text size and ▾ for compact mode. Size and position are remembered per website.
 
 Stop: click **Stop**, press Alt+Shift+Y again, or close the tab. Stop the server with Ctrl+C.
+After updating the code: `./start.sh restart` (or `./start.sh stop`).
 
 ### Optional: start the server automatically at login
 ```bash
