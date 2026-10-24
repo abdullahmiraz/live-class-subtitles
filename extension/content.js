@@ -7,8 +7,17 @@
 //   live     the sentence being spoken right now (rough, italic, pulsing LIVE tag)
 //   grip     resize from the bottom-right corner (min 320 × 120 px)
 (() => {
-  if (window.__ruenSubs) return;
-  window.__ruenSubs = true;
+  // One live instance per page. After the extension is reloaded, the old script is orphaned
+  // (chrome.runtime.id becomes undefined) but its box stays on screen: clean that up.
+  const prev = window.__ruenSubs;
+  if (prev && prev.alive()) return;
+  document.querySelectorAll("#ruen-live-subs").forEach((el) => el.remove());
+  window.__ruenSubs = { alive: () => !!(chrome.runtime && chrome.runtime.id) };
+  const watchdog = setInterval(() => {
+    if (chrome.runtime && chrome.runtime.id) return;
+    clearInterval(watchdog);
+    host && host.remove(); // extension reloaded/removed: never leave a frozen box behind
+  }, 2000);
 
   const MIN_W = 320, MIN_H = 120, MAX_HISTORY = 300;
   let host, root, box, histEl, liveEn, liveRu, liveWrap, statusEl, newBtn;
@@ -318,8 +327,10 @@
   }
 
   // ---------- messages from the extension ----------
-  chrome.runtime.onMessage.addListener((m) => {
+  chrome.runtime.onMessage.addListener((m, _sender, reply) => {
+    if (m.type === "ping") return reply(true); // background checks the script is present
     if (m.type === "overlay-show") {
+      if (typeof m.conn === "boolean") live = m.conn;
       clearTimeout(hideTimer); // restarted right after a save
       settings = { ...settings, ...m.settings };
       build();
@@ -352,6 +363,7 @@
       savedTimer = setTimeout(showStatus, 6000);
     } else if (m.type === "sub") {
       build();
+      if (!live && m.kind !== "error") { live = true; showStatus(); } // text is arriving, so we're connected
       if (m.kind === "final") addFinal(m);
       else if (m.kind === "partial") setLive(m.en, m.ru);
       else if (m.kind === "error") { statusEl.textContent = m.en; statusEl.style.color = "#ff8f8f"; }

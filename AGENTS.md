@@ -63,6 +63,8 @@ Load the extension: `chrome://extensions` → Developer mode → Load unpacked �
 - GigaAM writes English speech in Latin letters. `looks_english()` (>50% Latin letters) routes those sentences to Whisper-tiny, while mixed RU sentences with English terms stay Russian.
 - **Saving lives in the extension**, not the server. background.js buffers finals in `chrome.storage.session` (`rec`), serialized through a promise chain, and downloads via `chrome.downloads` with a `data:` URL (MV3 service workers have no `URL.createObjectURL`). Stop (button, shortcut, tab close) always flushes the file.
 - **Yandex word alignment**: the browser endpoint with `options=4` returns `align: ["s:l-s:l,…"]` (char offsets, first entry = whole sentence). Offsets refer to the html-escaped text, so they're only used when escaping changes nothing.
+- **Reloading the extension orphans its content scripts**: their box stays on the page, frozen, and Chrome doesn't inject the new content.js into already-open tabs. background.js `ensureContent()` pings the tab and injects content.js via `chrome.scripting` when missing. content.js removes leftover boxes on load and runs a watchdog that removes its own box once `chrome.runtime.id` is gone.
+- Overlay status comes from `chrome.storage.session.conn` (sent with overlay-show). Any arriving subtitle also marks it live.
 - Flexbox: the scrollable history needs `min-height: 0`, or the box grows past its set height.
 - MV3 service workers sleep after ~30 s idle. In CDP tests, drive storage and messages from an extension page (e.g. open popup.html as a tab), not the SW target.
 - `pkill -f "<pattern>"` can match your own shell command line. Anchor patterns, e.g. `pkill -f '^\.venv/bin/python server\.py$'`.

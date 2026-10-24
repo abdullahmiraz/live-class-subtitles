@@ -67,6 +67,25 @@ const finishSaving = () => serial(async () => {
   return { saved: true, filename, count: rec.entries.length };
 });
 
+// ---------- page script ----------
+// Tabs opened before the extension was (re)loaded don't have content.js yet: inject it on demand.
+async function ensureContent(tabId) {
+  try {
+    if (await chrome.tabs.sendMessage(tabId, { type: "ping" })) return;
+  } catch {}
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+  } catch (e) {
+    console.warn("cannot show subtitles on this page:", e.message); // e.g. chrome:// or the Web Store
+  }
+}
+
+async function showOverlay(tabId) {
+  await ensureContent(tabId);
+  const { conn } = await chrome.storage.session.get("conn");
+  chrome.tabs.sendMessage(tabId, { type: "overlay-show", settings: await getSettings(), conn: !!conn }).catch(() => {});
+}
+
 // ---------- capture ----------
 async function ensureOffscreen() {
   const ctx = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
@@ -84,9 +103,9 @@ async function start(tabId, streamId) {
   const settings = await getSettings();
   if (!streamId) streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   await ensureOffscreen();
-  await chrome.storage.session.set({ capture: { tabId } });
+  await chrome.storage.session.set({ capture: { tabId }, conn: false });
   await chrome.runtime.sendMessage({ target: "offscreen", type: "start", streamId, tabId, settings });
-  chrome.tabs.sendMessage(tabId, { type: "overlay-show", settings }).catch(() => {});
+  await showOverlay(tabId);
   chrome.action.setBadgeText({ text: "ON", tabId });
   chrome.action.setBadgeBackgroundColor({ color: "#d33" });
   if (settings.saveMode === "auto") await beginSaving(tabId);
@@ -123,6 +142,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case "save-stop": return reply(await finishSaving());
       case "sub":
       case "conn": {
+        if (msg.type === "conn") await chrome.storage.session.set({ conn: msg.ok });
         // from offscreen -> forward to the captured tab's overlay
         const cur = await state();
         if (cur) chrome.tabs.sendMessage(cur.tabId, msg).catch(() => {});
@@ -158,7 +178,7 @@ chrome.commands.onCommand.addListener(async (cmd, tab) => {
 chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   const cur = await state();
   if (!cur || cur.tabId !== tabId || info.status !== "complete") return;
-  chrome.tabs.sendMessage(tabId, { type: "overlay-show", settings: await getSettings() }).catch(() => {});
+  await showOverlay(tabId);
   notifySaving(tabId);
 });
 
