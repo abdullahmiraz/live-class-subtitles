@@ -4,12 +4,15 @@
 
 Live English subtitles for any Chrome tab playing Russian speech (online classes, YouTube, Meet, Zoom web…). No accounts, no API keys, no paid services.
 
+> **License: personal, non-commercial use only** ([PolyForm Strict 1.0.0](LICENSE)). Redistribution, modified versions, and use in other products or services need written permission. See [License](#license).
+
 - **Speech recognition**: runs on your PC (GigaAM-v3 by Sber, the most accurate open Russian model). Light: it processes speech about 25× faster than real time on 4 CPU threads, and uses no CPU when nobody is speaking.
 - **Translation**: online only, through the free Yandex / Google web endpoints (no account, no key, no CPU). Default order: **Yandex classic → Google → Yandex LLM** (Yandex classic reads best in real classes; benchmark scores below). If one fails, the next takes over automatically.
 - **English sentences**: if the speaker switches to English, that sentence is written down as said (Whisper-tiny) instead of being mistranslated. You can hide those sentences with a popup switch. Russian sentences with a few English words are always kept.
-- **Record a class**: keep the **transcript (EN + RU)**, the **audio**, or both, only if you choose it. Modes are **Off** (default), **Manual** (Start recording / Stop & save) and **Auto** (every session). Transcripts come as Markdown, SRT subtitles, plain text or JSON. Audio is the tab's sound as Opus `.webm` (~15 MB/hour) with a proper duration, so players can seek. An `.srt` plus a `.webm` from the same session play together in VLC/mpv. Files go to `Downloads/ru-en-subtitles/`.
+- **Record a class**: keep the **transcript (EN + RU)**, the **audio**, or both, only if you choose it. Modes are **Off** (default), **Manual** (Start recording / Stop & save) and **Auto** (every session). Transcripts come as Markdown, SRT subtitles, plain text or JSON. Audio is the tab's sound as **MP3** (default, plays on any device, ~22 MB/hour) or Opus `.webm` (smallest, ~15 MB/hour). An `.srt` and the audio file from the same session play together in VLC/mpv. Files go to `Downloads/ru-en-subtitles/`.
 - **Learning mode**: each Russian word and its English translation get the **same color**, and hovering a word highlights its pair. It uses Yandex's word alignment, so you learn as you read instead of only translating.
-- **Comfortable subtitle box**: newest sentence at the bottom (like Meet/Teams captions), with the latest one highlighted and older ones fading. A separate **LIVE** line shows the sentence being spoken. You can scroll back through history, and a "↓ new" button appears if you scrolled up. The box is resizable (min 320 px), has compact/expanded modes, A−/A+ text size and adjustable background opacity, and ✕ shrinks it to a "CC" pill. Motion is gentle and respects "reduce motion".
+- **Two display modes**: **Subtitles**, which shows only the English translation as one caption line over the video like YouTube CC (it follows the video, fades in silence, and can be dragged; double-click resets it), or the **Panel**, which keeps the full history in both languages.
+- **Comfortable panel**: newest sentence at the bottom (like Meet/Teams captions), with the latest one highlighted and older ones fading. A separate **LIVE** line shows the sentence being spoken. You can scroll back through history, and a "↓ new" button appears if you scrolled up. The box is resizable (min 320 px), has compact/expanded modes, A−/A+ text size and adjustable background opacity, and ✕ shrinks it to a "CC" pill. Motion is gentle and respects "reduce motion".
 
 ## Use it
 
@@ -46,7 +49,7 @@ ru-en-live-subtitles/
 ├── server/
 │   ├── server.py               voice detection + recognition + translation, WebSocket on 127.0.0.1:8765
 │   ├── engine.py               local speech recognition (Silero VAD, GigaAM-v3, streaming Zipformer, Whisper-tiny for English)
-│   ├── translate.py            online translators, ranked by accuracy
+│   ├── translate.py            online translators (default order Yandex classic → Google → Yandex LLM)
 │   ├── download_models.sh      fetches the 4 models (~350 MB)
 │   ├── models/                 GigaAM-v3 (222 MB), Whisper-tiny for English (99 MB), live-text model (29 MB), voice detector (0.6 MB)
 │   ├── transcripts/            debug logs, only with ./start.sh --save-transcripts
@@ -97,9 +100,20 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
    - Chrome reserves **Alt+Shift+T** (focus toolbar), so the shortcut silently never registered. Changed to **Alt+Shift+Y**.
    - Running sherpa-onnx recognizers on different threads at once produced `<unk><unk>…` garbage. All speech recognition now runs on one dedicated thread. After the fix, 17/17 segments were correct.
 9. **Packaging.** Added `start.sh` (sets itself up on first run), `download_models.sh`, an optional systemd user service, and this README.
-10. **Cleanup: accuracy-ranked and light.** Translation is now online only, ranked by benchmark accuracy (Google → Yandex LLM → Yandex classic). Every local translation model was removed, and the live text is translated online at most every 1.5 s, in the background. Unused speech models, benchmark data and test transcripts went to the Trash (recoverable). The server folder dropped from 5.5 GB to about 350 MB (models 251 MB, Python environment 100 MB, down from 309 MB). Smoke test passed: 0% CPU when idle.
+10. **Cleanup: accuracy-ranked and light.** Translation became online only, ranked by benchmark accuracy at the time (Google first); later the owner chose Yandex classic as the default (step 17). Every local translation model was removed, and the live text is translated online at most every 1.5 s, in the background. Unused speech models, benchmark data and test transcripts went to the Trash (recoverable). The server folder dropped from 5.5 GB to about 350 MB (models 251 MB, Python environment 100 MB, down from 309 MB). Smoke test passed: 0% CPU when idle.
 
 11. **English sentences.** English speech was being mistranslated (GigaAM writes it in garbled Latin letters, e.g. "This Reserches the potencial the overtiran conventional Hyprofeces"). We tried a Whisper language detector, then switched to a zero-cost text check: mostly Latin letters means an English sentence. Only those sentences go to Whisper-tiny (~0.6 s each), which writes down what was said. A popup switch can hide them, and mixed Russian sentences are always kept. The text check passed 9/9 on real and mixed examples.
+12. **GitHub + agent-friendly setup.** Public repo, AGENTS.md (constraints, protocol, gotchas), tests and CI, and issues for the next stage.
+13. **Save transcripts (#1).** Off / Manual / Auto in Markdown, SRT, TXT or JSON, saved only when you choose it. The server's own log became opt-in.
+14. **Panel redesign from caption-UX research** (Meet, Teams, Live Caption):
+    - newest sentence at the bottom, with a separate LIVE line
+    - scrollback and a "↓ new" button
+    - resize, compact mode, background opacity
+    - gentle motion and a "CC" pill
+    The test runs caught several bugs: a flexbox overflow, frozen boxes after an extension reload (now re-injected on demand), and a history anchored to the top instead of the bottom.
+15. **Learning mode.** Yandex word alignment colors each Russian word and its translation the same, including the live line.
+16. **Record a class (#3).** Audio and/or transcript. Chrome on Linux can't record MP3/AAC, so MP3 is encoded with lamejs; a WebM option keeps files smallest, with the missing length patched into the file. An MP3 race that doubled the audio was found and fixed.
+17. **Owner's choices.** Yandex classic is the default translator. Subtitle mode is translation-only, like YouTube CC. The license is PolyForm Strict (personal use only).
 
 ## Roadmap
 Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues?q=label%3Anext-stage)):
@@ -108,14 +122,23 @@ Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/ru-en-li
 - Learning-mode ideas: vocabulary list, Anki export, stress marks, Russian-first recall mode…
 - Auto-start on websites you list, and remember sites you've used it on.
 
-## Credits & licenses
-Code: MIT (see [LICENSE](LICENSE)). Models are downloaded at setup, not stored in this repo:
+## License
+Copyright © 2026 Abdullah Miraz. **Source-available, not open source.** Licensed under the [PolyForm Strict License 1.0.0](LICENSE):
+- ✅ Personal, non-commercial use: study, hobby, your own classes. Use by schools and non-profits is also allowed by the license.
+- ❌ No redistribution, no publishing modified versions, no building other products or services on it, no commercial use, unless you have written permission. [Open an issue](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues) to ask.
+- Breaking the terms ends your license (after a 32-day chance to fix it after written notice). After that, any further use is copyright infringement.
+
+Versions published before 2026-10-24 19:30 were MIT-licensed. Those copies keep MIT; everything from this commit on is PolyForm Strict.
+
+## Credits
+Models are downloaded at setup, not stored in this repo:
 [GigaAM-v3](https://github.com/salute-developers/GigaAM) (Sber, MIT),
 [Whisper](https://github.com/openai/whisper) tiny (OpenAI, MIT),
 [Silero VAD](https://github.com/snakers4/silero-vad) (MIT),
 streaming Zipformer RU (Alpha Cephei / Vosk, Apache-2.0), all run via
 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0).
 Benchmarks use [Google FLEURS](https://huggingface.co/datasets/google/fleurs) (CC-BY-4.0).
+MP3 encoding uses [lamejs](https://github.com/zhuker/lamejs) (LGPL-3.0, bundled unmodified in `extension/vendor/`).
 
 ## Notes / limits
 - The Google/Yandex endpoints are the free, unauthenticated ones their own browser features use. This project is not affiliated with Google or Yandex; use them for personal, moderate use. There is no account quota or token limit, but they are unofficial: heavy use from one IP can get temporarily rate-limited, and they could change. A failing engine is skipped for 60 s and the next one is used. **Translation needs internet.**

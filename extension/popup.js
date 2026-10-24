@@ -1,6 +1,6 @@
 const DEFAULTS = {
   server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
-  saveMode: "off", saveFormat: "md", saveTranscript: true, saveAudio: false, learn: false, bgOpacity: 0.88,
+  saveMode: "off", saveFormat: "md", saveTranscript: true, saveAudio: false, audioFormat: "mp3", learn: false, bgOpacity: 0.88, display: "panel",
 };
 const $ = (id) => document.getElementById(id);
 const bg = (m) => chrome.runtime.sendMessage({ target: "background", ...m });
@@ -17,7 +17,9 @@ $("saveMode").value = settings.saveMode;
 $("saveFormat").value = settings.saveFormat;
 $("saveTranscript").checked = settings.saveTranscript;
 $("saveAudio").checked = settings.saveAudio;
+$("audioFormat").value = settings.audioFormat;
 $("learn").checked = settings.learn;
+$("display").value = settings.display;
 $("bgOpacity").value = Math.round(settings.bgOpacity * 100);
 $("bgOpacityVal").textContent = $("bgOpacity").value + "%";
 
@@ -38,6 +40,7 @@ async function refreshSave(capturingHere) {
   btn.textContent = s.active ? "Stop & save" : "Start recording";
   btn.classList.toggle("on", s.active);
   $("saveFormat").disabled = !settings.saveTranscript;
+  $("audioFormat").disabled = !settings.saveAudio;
   const what = [s.transcript && `${s.count} sentence${s.count === 1 ? "" : "s"}`, s.audio && "audio"].filter(Boolean).join(" + ");
   if (s.active) $("saveInfo").textContent = `⏺ Recording… ${what}`;
   else if (settings.saveMode !== "off" && nothing) $("saveInfo").textContent = "Tick Transcript and/or Audio.";
@@ -65,17 +68,28 @@ $("toggle").onclick = async () => {
   if (cur && cur.tabId === tab.id) await bg({ type: "stop" });
   else {
     // must be called from the popup (user gesture) to get a stream id for this tab
-    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
-    await bg({ type: "start", tabId: tab.id, streamId });
+    let res;
+    try {
+      const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      res = await bg({ type: "start", tabId: tab.id, streamId });
+    } catch (e) {
+      res = { error: e.message };
+    }
+    if (res && res.error) {
+      $("srv").textContent = "can't capture this page (Chrome's own pages and the Web Store are blocked)";
+      $("srv").className = "bad";
+    }
   }
   refresh();
 };
 
-for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "learn"]) {
+for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "audioFormat", "learn", "display"]) {
   $(id).onchange = async () => {
-    settings[id] = $(id).type === "checkbox" ? $(id).checked : $(id).type === "number" ? Number($(id).value) : $(id).value;
-    await chrome.storage.sync.set({ [id]: settings[id] });
-    bg({ type: "settings", settings });
+    let v = $(id).type === "checkbox" ? $(id).checked : $(id).value;
+    if (id === "fontSize") v = $(id).value = Math.max(12, Math.min(48, Math.round(Number(v)) || 26)); // never 0 / empty
+    settings[id] = v;
+    await chrome.storage.sync.set({ [id]: v });
+    bg({ type: "settings", settings: { [id]: v } }); // only what changed (the box may have changed others)
     refresh();
   };
 }
@@ -84,7 +98,7 @@ for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFor
 $("bgOpacity").oninput = () => {
   settings.bgOpacity = Number($("bgOpacity").value) / 100;
   $("bgOpacityVal").textContent = $("bgOpacity").value + "%";
-  bg({ type: "settings", settings });
+  bg({ type: "settings", settings: { bgOpacity: settings.bgOpacity } });
 };
 $("bgOpacity").onchange = () => chrome.storage.sync.set({ bgOpacity: settings.bgOpacity });
 

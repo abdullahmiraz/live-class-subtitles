@@ -11,17 +11,19 @@
   // (chrome.runtime.id becomes undefined) but its box stays on screen: clean that up.
   const prev = window.__ruenSubs;
   if (prev && prev.alive()) return;
-  document.querySelectorAll("#ruen-live-subs").forEach((el) => el.remove());
+  document.querySelectorAll("#ruen-live-subs, #ruen-live-captions").forEach((el) => el.remove());
   window.__ruenSubs = { alive: () => !!(chrome.runtime && chrome.runtime.id) };
   const watchdog = setInterval(() => {
     if (chrome.runtime && chrome.runtime.id) return;
     clearInterval(watchdog);
     host && host.remove(); // extension reloaded/removed: never leave a frozen box behind
+    capHost && capHost.remove();
+    clearInterval(capTimer);
   }, 2000);
 
   const MIN_W = 320, MIN_H = 120, MAX_HISTORY = 300;
   let host, root, box, histEl, liveEn, liveRu, liveWrap, statusEl, newBtn;
-  let settings = { showRu: true, fontSize: 22, bgOpacity: 0.88 };
+  let settings = { showRu: true, fontSize: 22, bgOpacity: 0.88, display: "panel" };
   let ui = { compact: false, w: null, h: null, left: null, top: null }; // per-site, chrome.storage.local
   let live = false, saving = null, savedTimer, hideTimer, unseen = 0, stick = true, startedAt = null;
   const KEY = "ui:" + location.host;
@@ -93,7 +95,7 @@
     if (host) return;
     host = document.createElement("div");
     host.id = "ruen-live-subs";
-    host.style.cssText = "all:initial;position:fixed;z-index:2147483647;";
+    host.style.cssText = "all:initial;position:fixed;z-index:2147483647;margin:0;padding:0;border:0;background:transparent;overflow:visible;inset:auto;";
     root = host.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${CSS}</style>
       <div class="box">
@@ -101,6 +103,7 @@
           <span class="st">connecting…</span>
           <button class="btn" data-a="smaller" title="Smaller text">A−</button>
           <button class="btn" data-a="bigger" title="Bigger text">A+</button>
+          <button class="btn" data-a="subs" title="Subtitle mode (like YouTube captions)">CC</button>
           <button class="btn" data-a="compact" title="Compact / show history">▾</button>
           <button class="btn" data-a="hide" title="Hide (subtitles keep running; reopen from the extension)">✕</button>
         </div>
@@ -148,10 +151,14 @@
   function setHidden(hidden) {
     const pill = root.querySelector(".pill");
     if (hidden) {
+      if (capHost) capHost.style.display = "none";
+      if (isSubs()) { box.style.display = "none"; pill.style.display = "block"; host.style.height = host.style.width = "auto"; ui.hidden = true; return; }
       box.classList.add("enter");
       setTimeout(() => { box.style.display = "none"; pill.style.display = "block"; host.style.height = "auto"; host.style.width = "auto"; }, 220);
     } else {
       pill.style.display = "none";
+      ui.hidden = false;
+      if (isSubs()) { apply(); return; }
       box.style.display = "";
       layout();
       requestAnimationFrame(() => requestAnimationFrame(() => box.classList.remove("enter")));
@@ -214,15 +221,39 @@
     grip.addEventListener("pointerup", () => { if (sx !== undefined) { sx = undefined; saveUi(); if (stick) scrollToEnd(true); } });
   }
 
-  // keep the box visible in fullscreen video
-  function mount() {
-    const parent = document.fullscreenElement || document.documentElement;
-    if (host.parentNode !== parent) parent.appendChild(host);
+  // Keep our elements visible in fullscreen. A fullscreen <div> can host them; a fullscreen <video> or
+  // <iframe> can't (replaced elements don't render children), so then we use the browser's top layer.
+  function fsParent() {
+    const fs = document.fullscreenElement;
+    return fs && !/^(VIDEO|IFRAME)$/.test(fs.tagName) ? fs : document.documentElement;
   }
-  document.addEventListener("fullscreenchange", () => host && (mount(), layout()));
+  function attach(el) {
+    if (!el) return;
+    const parent = fsParent();
+    if (el.parentNode !== parent) parent.appendChild(el);
+    const videoFs = document.fullscreenElement && parent === document.documentElement;
+    try {
+      if (videoFs) {
+        el.popover = "manual"; // only while a <video>/<iframe> is fullscreen: popovers render above it
+        if (el.matches(":popover-open")) el.hidePopover();
+        el.showPopover();
+      } else if (el.hasAttribute("popover")) {
+        if (el.matches(":popover-open")) el.hidePopover();
+        el.removeAttribute("popover"); // a closed popover is display:none, so drop it outside fullscreen
+      }
+    } catch {}
+  }
+  function mount() { attach(host); }
+  document.addEventListener("fullscreenchange", () => { if (host) { mount(); layout(); } if (capHost) { attach(capHost); placeCaptions(); } });
 
   // ---------- controls ----------
   function action(a) {
+    if (a === "subs" || a === "panel") {
+      settings.display = a === "subs" ? "subtitles" : "panel";
+      chrome.storage.sync.set({ display: settings.display });
+      apply();
+      return;
+    }
     if (a === "hide") setHidden(true);
     else if (a === "compact") { ui.compact = !ui.compact; saveUi(); layout(); }
     else if (a === "bigger" || a === "smaller") {
@@ -234,6 +265,16 @@
 
   function apply() {
     if (!box) return;
+    if (isSubs() && !ui.hidden) {
+      box.style.display = "none";
+      host.style.width = host.style.height = "0px"; // panel keeps collecting history, invisibly
+      buildCaptions();
+      capHost.style.display = "";
+      renderCaptions();
+    } else if (!isSubs()) {
+      if (capHost) capHost.style.display = "none";
+      if (!ui.hidden && box.style.display === "none") { box.style.display = ""; layout(); }
+    }
     box.style.fontSize = settings.fontSize + "px";
     const a = Math.max(0.15, Math.min(1, settings.bgOpacity ?? 0.88));
     box.style.setProperty("--bg-a", a);
@@ -277,10 +318,115 @@
     if (m.lang === "en") { it.querySelector(".en").textContent = m.en; ru.textContent = "spoken in English"; ru.classList.add("said-en"); }
     else colorize(it.querySelector(".en"), ru, m);
     histEl.appendChild(it);
+    lastFinal = m; liveCue = null; renderCaptions();
     while (histEl.children.length > MAX_HISTORY) histEl.firstElementChild.remove();
     setLive("", "");
     if (stick || ui.compact) scrollToEnd();
     else { unseen++; newBtn.textContent = `↓ ${unseen} new`; newBtn.style.display = "block"; }
+  }
+
+  // ---------- subtitle mode: YouTube-style captions over the video ----------
+  let capHost, capRoot, capEl, capTimer, lastFinal = null, liveCue = null, fadeTimer;
+  const isSubs = () => settings.display === "subtitles";
+  const CAP_CSS = `
+    :host { all: initial; }
+    .cap { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; cursor: grab;
+      font-family: "YouTube Noto", Roboto, "Segoe UI", Arial, sans-serif; color: #fff; line-height: 1.42;
+      transition: opacity .35s ease; user-select: none; }
+    .cap.gone { opacity: 0; }
+    .cue { max-width: 100%; animation: capin .22s ease-out; }
+    .cue span.txt { background: rgba(8, 8, 8, var(--bg-a, .75)); padding: .06em .38em; border-radius: 3px;
+      -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .cue.prev { opacity: .78; }
+    .cue.now .txt { font-weight: 500; }
+    .ru { font-size: .66em; color: #e8e2c0; }
+    .w { color: var(--c); }
+    .ru .w { text-decoration: underline 1px; text-underline-offset: 3px; }
+    .bar { position: absolute; left: 50%; transform: translateX(-50%); top: 0; display: flex; gap: 2px; padding: 2px 4px;
+      background: rgba(14,16,20,.9); border-radius: 8px; opacity: 0; transition: opacity .2s ease .5s; pointer-events: none; }
+    .wrap:has(.cap:hover) .bar, .bar:hover { opacity: 1; pointer-events: auto; transition-delay: 0s; }
+    .btn { all: unset; cursor: pointer; padding: 2px 7px; border-radius: 6px; color: #ddd; font: 12px/18px system-ui, sans-serif; }
+    .btn:hover { background: rgba(255,255,255,.15); color: #fff; }
+    .wrap { position: relative; padding-top: 30px; pointer-events: none; } /* room for the hover toolbar; clicks pass to the video */
+    .cap { pointer-events: auto; }
+    @keyframes capin { from { opacity: 0; transform: translateY(4px); } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  `;
+
+  function buildCaptions() {
+    if (capHost) return;
+    capHost = document.createElement("div");
+    capHost.id = "ruen-live-captions";
+    capHost.style.cssText = "all:initial;position:fixed;z-index:2147483647;margin:0;padding:0;border:0;background:transparent;overflow:visible;inset:auto;";
+    capRoot = capHost.attachShadow({ mode: "open" });
+    capRoot.innerHTML = `<style>${CAP_CSS}</style><div class="wrap">
+      <div class="bar">
+        <button class="btn" data-a="panel" title="Back to the panel (history)">▤ panel</button>
+        <button class="btn" data-a="smaller">A−</button><button class="btn" data-a="bigger">A+</button>
+        <button class="btn" data-a="hide" title="Hide">✕</button>
+      </div><div class="cap gone"></div></div>`;
+    capEl = capRoot.querySelector(".cap");
+    capRoot.querySelectorAll(".btn").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); action(b.dataset.a); }));
+    // drag to move (offset from the automatic spot), double-click to reset
+    let sx, sy, ox, oy;
+    capEl.addEventListener("pointerdown", (e) => { sx = e.clientX; sy = e.clientY; ox = ui.capDx || 0; oy = ui.capDy || 0; capEl.setPointerCapture(e.pointerId); });
+    capEl.addEventListener("pointermove", (e) => { if (sx === undefined) return; ui.capDx = ox + e.clientX - sx; ui.capDy = oy + e.clientY - sy; placeCaptions(); });
+    capEl.addEventListener("pointerup", () => { if (sx !== undefined) { sx = undefined; saveUi(); } });
+    capEl.addEventListener("dblclick", () => { ui.capDx = ui.capDy = 0; saveUi(); placeCaptions(); });
+    attach(capHost);
+    capTimer = setInterval(() => isSubs() && placeCaptions(), 500); // follow the video (theater mode, scrolling, resize)
+  }
+
+  /** The video being watched: the largest visible <video>, else the whole window. */
+  function videoRect() {
+    let best = null, area = 0;
+    for (const v of document.querySelectorAll("video")) {
+      const r = v.getBoundingClientRect();
+      const visible = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) * Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
+      if (visible > area && r.width > 200 && r.height > 120) { best = r; area = visible; }
+    }
+    if (!best) return { left: 0, top: 0, width: innerWidth, height: innerHeight, bottom: innerHeight };
+    const top = Math.max(best.top, 0), bottom = Math.min(best.bottom, innerHeight);
+    return { left: best.left, top, width: best.width, height: bottom - top, bottom };
+  }
+
+  function placeCaptions() {
+    if (!capHost) return;
+    if (capHost.parentNode !== fsParent()) attach(capHost);
+    const v = videoRect();
+    const w = Math.min(v.width * 0.9, 1100);
+    capHost.style.width = w + "px";
+    const h = capHost.getBoundingClientRect().height;
+    const left = v.left + (v.width - w) / 2 + (ui.capDx || 0);
+    const top = v.bottom - h - Math.max(v.height * 0.07, 12) + (ui.capDy || 0);
+    capHost.style.left = Math.max(0, Math.min(left, innerWidth - w)) + "px";
+    capHost.style.top = Math.max(0, Math.min(top, innerHeight - h)) + "px";
+  }
+
+  function cueEl(c, cls, showRu) {
+    const d = document.createElement("div");
+    d.className = "cue " + cls;
+    d.innerHTML = `<span class="txt"><span class="en"></span>${showRu ? `<br><span class="ru"></span>` : ""}</span>`;
+    const en = d.querySelector(".en"), ru = d.querySelector(".ru") || document.createElement("span");
+    if (c.lang === "en") { en.textContent = c.en; ru.textContent = "(spoken in English)"; }
+    else if (c.align && c.align.length && c.ru) colorize(en, ru, c); // learning mode: colored English words
+    else { en.textContent = c.en; ru.textContent = c.ru || ""; }
+    return d;
+  }
+
+  function renderCaptions() {
+    if (!capEl || !isSubs()) return;
+    capRoot.host.style.fontSize = Math.round(settings.fontSize * 1.15) + "px";
+    capEl.style.setProperty("--bg-a", Math.max(0.15, Math.min(1, settings.bgOpacity ?? 0.88)) * 0.85);
+    // translation only, like YouTube captions: the sentence being spoken, else the last finished one
+    const cur = liveCue && liveCue.en && liveCue.en !== "…" ? liveCue : lastFinal;
+    const cues = cur ? [cueEl(cur, "now", false)] : [];
+    capEl.replaceChildren(...cues);
+    capEl.classList.toggle("gone", !cues.length);
+    placeCaptions();
+    // like YouTube: captions disappear when nobody has spoken for a while
+    clearTimeout(fadeTimer);
+    if (!liveCue && cues.length) fadeTimer = setTimeout(() => capEl.classList.add("gone"), 7000);
   }
 
   // ---------- learning mode: same color for a Russian word and its translation ----------
@@ -323,6 +469,8 @@
   }
 
   function setLive(en, ru, align) {
+    liveCue = en || ru ? { en: en || "…", ru, align } : null;
+    renderCaptions();
     liveWrap.classList.toggle("idle", !en && !ru);
     if (en && ru && align && align.length) colorize(liveEn, liveRu, { en, ru, align });
     else {
@@ -347,7 +495,9 @@
         const h = host;
         setTimeout(() => h && h.remove(), 250);
         host = statusEl = histEl = null;
-        live = false; saving = null; startedAt = null; stick = true; unseen = 0;
+        if (capHost) { capHost.remove(); capHost = null; clearInterval(capTimer); }
+        lastFinal = liveCue = null;
+        live = false; saving = null; startedAt = null; stick = true; unseen = 0; ui.hidden = false;
       };
       // just saved a file? keep the box up a moment so the "saved" notice is readable
       if (statusEl && statusEl.textContent.startsWith("✔")) { setLive("", ""); hideTimer = setTimeout(remove, 5000); }

@@ -18,7 +18,6 @@ mkdir -p "$(dirname "$UNIT")"
 cat > "$UNIT" <<EOF
 [Unit]
 Description=RU->EN live subtitle server (local speech recognition)
-After=network-online.target
 
 [Service]
 ExecStart=$DIR/start.sh

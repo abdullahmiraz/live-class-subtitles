@@ -88,7 +88,9 @@ def drop_repeats(text: str) -> str:
         n = norm(sent)
         if not n:
             continue
-        if any(n == norm(k) or norm(k).startswith(n) for k in kept):
+        # an exact repeat, or a trailing fragment of an earlier sentence (3+ words, so "Yes." after
+        # "Yes, I agree." is kept)
+        if any(n == norm(k) or (len(n.split()) >= 3 and norm(k).startswith(n)) for k in kept):
             break
         kept.append(sent)
     return " ".join(kept)

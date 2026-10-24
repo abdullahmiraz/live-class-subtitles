@@ -7,11 +7,21 @@ const DEFAULTS = {
   saveMode: "off", // off | manual | auto
   saveFormat: "md", // md | srt | txt | json
   saveTranscript: true, // what a recording keeps: the transcript (EN + RU)…
-  saveAudio: false, //   …and/or the class audio (.webm)
+  saveAudio: false, //   …and/or the class audio
+  audioFormat: "mp3", // mp3 (plays everywhere) | webm (Opus, smallest)
   learn: false, // learning mode: color-match Russian words with their translation
   bgOpacity: 0.88, // subtitle box background
+  display: "panel", // panel (history box) | subtitles (YouTube-style captions over the video)
 };
 const getSettings = async () => ({ ...DEFAULTS, ...(await chrome.storage.sync.get(Object.keys(DEFAULTS))) });
+
+/** Message the offscreen document; never waits longer than `ms` (resolves to `fallback`). */
+function toOffscreen(msg, ms = 10000, fallback = null) {
+  return Promise.race([
+    chrome.runtime.sendMessage({ target: "offscreen", ...msg }).catch(() => fallback),
+    new Promise((res) => setTimeout(() => res(fallback), ms)),
+  ]);
+}
 
 async function state() {
   const { capture } = await chrome.storage.session.get("capture");
@@ -37,17 +47,17 @@ async function notifySaving(tabId) {
 
 const beginSaving = (tabId) => serial(async () => {
   if (await getRec()) return;
-  const { saveTranscript, saveAudio } = await getSettings();
+  const { saveTranscript, saveAudio, audioFormat } = await getSettings();
   if (!saveTranscript && !saveAudio) return; // nothing selected to keep
   const tab = await chrome.tabs.get(tabId);
   let site = "tab";
   try { site = new URL(tab.url).hostname || "tab"; } catch {}
   const rec = {
     tabId, site, url: tab.url, title: tab.title, startedAt: Date.now(), entries: [],
-    wantTranscript: !!saveTranscript, wantAudio: !!saveAudio,
+    wantTranscript: !!saveTranscript, wantAudio: !!saveAudio, audioFormat: audioFormat === "webm" ? "webm" : "mp3",
   };
   await chrome.storage.session.set({ rec });
-  if (rec.wantAudio) await chrome.runtime.sendMessage({ target: "offscreen", type: "rec-start" }).catch(() => {});
+  if (rec.wantAudio) await toOffscreen({ type: "rec-start", format: rec.audioFormat }, 3000);
   await notifySaving(tabId);
 });
 
@@ -62,15 +72,25 @@ const addEntry = (e) => serial(async () => {
 /** Resolves when a download has finished (the offscreen blob: URL must live until then). */
 function downloadDone(id, timeoutMs = 120000) {
   return new Promise((resolve) => {
-    const t = setTimeout(() => { chrome.downloads.onChanged.removeListener(on); resolve(false); }, timeoutMs);
+    let finished = false;
+    const end = (ok) => { if (finished) return; finished = true; clearTimeout(t); chrome.downloads.onChanged.removeListener(on); resolve(ok); };
+    const t = setTimeout(() => end(false), timeoutMs);
     function on(d) {
-      if (d.id !== id || !d.state || d.state.current === "in_progress") return;
-      clearTimeout(t);
-      chrome.downloads.onChanged.removeListener(on);
-      resolve(d.state.current === "complete");
+      if (d.id === id && d.state && d.state.current !== "in_progress") end(d.state.current === "complete");
     }
     chrome.downloads.onChanged.addListener(on);
+    // it may already have finished before we subscribed (small files are instant)
+    chrome.downloads.search({ id }).then(([it]) => { if (it && it.state !== "in_progress") end(it.state === "complete"); });
   });
+}
+
+/** Download a blob: URL made by the offscreen document, then let it free the memory. Returns the saved name. */
+async function downloadBlob(url, filename) {
+  const id = await chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false });
+  await downloadDone(id);
+  toOffscreen({ type: "rec-free", url }, 2000);
+  const [item] = await chrome.downloads.search({ id }); // Chrome may have renamed it ("… (1).mp3")
+  return item && item.filename ? item.filename.split(/[\\/]/).pop() : filename.split("/").pop();
 }
 
 const finishSaving = () => serial(async () => {
@@ -82,14 +102,10 @@ const finishSaving = () => serial(async () => {
   const files = [];
 
   if (rec.wantAudio) {
-    const audio = await chrome.runtime.sendMessage({ target: "offscreen", type: "rec-stop" }).catch(() => null);
+    const audio = await toOffscreen({ type: "rec-stop" }, 15000);
     if (audio && audio.url) {
-      const filename = fileName(rec, "md").replace(/\.md$/, ".webm");
-      const id = await chrome.downloads.download({ url: audio.url, filename, conflictAction: "uniquify", saveAs: false });
-      await downloadDone(id);
-      chrome.runtime.sendMessage({ target: "offscreen", type: "rec-free", url: audio.url }).catch(() => {});
-      const [item] = await chrome.downloads.search({ id }); // Chrome may have renamed it ("… (1).webm")
-      const saved = item && item.filename ? item.filename.split(/[\\/]/).pop() : filename.split("/").pop();
+      const filename = fileName(rec, "md").replace(/\.md$/, "." + (audio.ext || rec.audioFormat || "mp3"));
+      const saved = await downloadBlob(audio.url, filename);
       rec.audioFile = saved;
       files.push("ru-en-subtitles/" + saved);
     }
@@ -99,13 +115,14 @@ const finishSaving = () => serial(async () => {
     const { saveFormat } = await getSettings();
     const format = FORMATS[saveFormat] ? saveFormat : "md";
     const filename = fileName(rec, format);
-    await chrome.downloads.download({
-      url: dataUrl(render(rec, format), FORMATS[format].mime),
-      filename,
-      conflictAction: "uniquify",
-      saveAs: false,
-    });
-    files.push(filename);
+    const text = render(rec, format);
+    // long classes: a blob: URL from the offscreen document (data: URLs hit Chrome's ~2 MB URL limit)
+    const blob = await toOffscreen({ type: "make-blob", text, mime: FORMATS[format].mime }, 5000);
+    if (blob && blob.url) files.push("ru-en-subtitles/" + (await downloadBlob(blob.url, filename)));
+    else {
+      await chrome.downloads.download({ url: dataUrl(text, FORMATS[format].mime), filename, conflictAction: "uniquify", saveAs: false });
+      files.push(filename);
+    }
   }
 
   if (!files.length) return { saved: false, reason: "nothing was said" };
@@ -144,24 +161,33 @@ async function ensureOffscreen() {
 }
 
 async function start(tabId, streamId) {
+  // get the stream first: if this tab can't be captured (chrome:// pages…), the running session stays untouched
+  if (!streamId) streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   const cur = await state();
   if (cur) await stop();
   const settings = await getSettings();
-  if (!streamId) streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   await ensureOffscreen();
   await chrome.storage.session.set({ capture: { tabId }, conn: false });
-  await chrome.runtime.sendMessage({ target: "offscreen", type: "start", streamId, tabId, settings });
+  await toOffscreen({ type: "start", streamId, tabId, settings }, 5000);
   await showOverlay(tabId);
   chrome.action.setBadgeText({ text: "ON", tabId });
   chrome.action.setBadgeBackgroundColor({ color: "#d33" });
   if (settings.saveMode === "auto") await beginSaving(tabId);
 }
 
+/** Let the server finish the sentence being spoken, so it lands in the saved transcript. */
+async function flushLastSentence() {
+  if (!(await getRec())) return;
+  await toOffscreen({ type: "flush" }, 9000);
+  await new Promise((r) => setTimeout(r, 400)); // let the last "final" message reach addEntry
+}
+
 async function stop() {
   const cur = await state();
-  await finishSaving(); // first: the audio recorder lives in the offscreen document
+  await flushLastSentence();
+  await finishSaving(); // before closing: the audio recorder lives in the offscreen document
   await chrome.storage.session.remove("capture");
-  try { await chrome.runtime.sendMessage({ target: "offscreen", type: "stop" }); } catch {}
+  await toOffscreen({ type: "stop" }, 3000);
   try { await chrome.offscreen.closeDocument(); } catch {}
   if (cur) {
     chrome.tabs.sendMessage(cur.tabId, { type: "overlay-hide" }).catch(() => {});
@@ -172,6 +198,7 @@ async function stop() {
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.target !== "background") return;
   (async () => {
+   try {
     switch (msg.type) {
       case "start": await start(msg.tabId, msg.streamId); break;
       case "stop": await stop(); break;
@@ -185,7 +212,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         if (cur) await beginSaving(cur.tabId);
         break;
       }
-      case "save-stop": return reply(await finishSaving());
+      case "save-stop": await flushLastSentence(); return reply(await finishSaving());
       case "sub":
       case "conn": {
         if (msg.type === "conn") await chrome.storage.session.set({ conn: msg.ok });
@@ -201,13 +228,17 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         const cur = await state();
         if (cur) {
           chrome.tabs.sendMessage(cur.tabId, { type: "overlay-settings", settings: msg.settings }).catch(() => {});
-          chrome.runtime.sendMessage({ target: "offscreen", type: "settings", settings: msg.settings }).catch(() => {});
+          toOffscreen({ type: "settings", settings: msg.settings }, 3000);
         }
         break;
       }
       case "ended": await stop(); break;
     }
     reply(true);
+   } catch (e) {
+    console.warn(msg.type, e);
+    reply({ error: String(e && e.message || e) }); // e.g. "cannot capture this page"
+   }
   })();
   return true;
 });
@@ -215,9 +246,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 // Keyboard shortcut: toggle on the active tab (a command counts as a user gesture for tabCapture).
 chrome.commands.onCommand.addListener(async (cmd, tab) => {
   if (cmd !== "toggle-capture") return;
-  const cur = await state();
-  if (cur && cur.tabId === tab.id) await stop();
-  else await start(tab.id);
+  try {
+    const cur = await state();
+    if (cur && cur.tabId === tab.id) await stop();
+    else await start(tab.id);
+  } catch (e) {
+    console.warn("shortcut:", e.message); // e.g. Chrome's own pages can't be captured
+  }
 });
 
 // Page reloaded/navigated inside the captured tab: show the overlay (and saving indicator) again.

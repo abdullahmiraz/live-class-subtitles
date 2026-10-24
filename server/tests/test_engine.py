@@ -33,10 +33,11 @@ def test_looks_english(text, expected):
 
 @pytest.mark.parametrize("text,expected", [
     # real Whisper-tiny output from a class
-    ("Economic instability is affecting market's worldwide. Economic instability is affecting market's worldwide. Economic instability",
+    ("Economic instability is affecting market's worldwide. Economic instability is affecting market's worldwide. Economic instability is",
      "Economic instability is affecting market's worldwide."),
     ("Any questions? Any questions?", "Any questions?"),
     ("Open your books. Page twelve, please.", "Open your books. Page twelve, please."),
+    ("Yes, I agree. Yes.", "Yes, I agree. Yes."),  # short real sentence, not a loop
     ("", ""),
 ])
 def test_drop_repeats(text, expected):

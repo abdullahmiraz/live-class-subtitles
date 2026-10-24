@@ -8,6 +8,11 @@ port_busy() { ss -ltn 2>/dev/null | grep -q '127.0.0.1:8765 '; }
 
 # ./start.sh restart  -> stop the running server (e.g. after an update) and start the new code
 if [ "${1:-}" = "restart" ] || [ "${1:-}" = "stop" ]; then
+  # autostart service installed? let systemd do it, so it doesn't fight a second copy
+  if systemctl --user is-active --quiet ru-en-subtitles 2>/dev/null; then
+    systemctl --user "$1" ru-en-subtitles && echo "Autostart service: $1 done (logs: journalctl --user -u ru-en-subtitles -f)"
+    exit 0
+  fi
   pkill -f '^\.venv/bin/python server\.py' || true
   for _ in $(seq 1 50); do port_busy || break; sleep 0.1; done
   [ "$1" = "stop" ] && { echo "Stopped."; exit 0; }

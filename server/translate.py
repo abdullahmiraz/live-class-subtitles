@@ -17,7 +17,7 @@ import uuid
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
 RANKED = ["yandex-nmt", "google", "yandex"]
-COOLDOWN = 60.0
+COOLDOWN = 20.0  # one slow reply shouldn't bench the preferred engine for long
 _sid = uuid.uuid4().hex
 _down_until = {}
 

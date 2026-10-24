@@ -22,13 +22,19 @@
 <button id="toggle">Start on this tab</button>
 <label>Translator
   <select id="engine">
-    <option value="auto">Auto (Yandex classic → Google)</option>
+    <option value="auto">Auto (Yandex classic → Google → Yandex LLM)</option>
     <option value="yandex-nmt">Yandex (classic)</option>
     <option value="google">Google</option>
     <option value="yandex">Yandex (LLM)</option>
   </select>
 </label>
-<label>Font size <input id="fontSize" type="number" min="12" max="60" /></label>
+<label>Display
+  <select id="display">
+    <option value="panel">Panel (history)</option>
+    <option value="subtitles">Subtitles (like YouTube)</option>
+  </select>
+</label>
+<label>Font size <input id="fontSize" type="number" min="12" max="48" /></label>
 <label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
 <label>Show Russian text <input id="showRu" type="checkbox" /></label>
 <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
@@ -50,7 +56,12 @@
       <option value="json">JSON (.json)</option>
     </select>
   </label>
-  <label title="The tab's audio as Opus .webm (~15 MB per hour). With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio recording (.webm)</span><span class="hint" style="margin:0">~15 MB/hour</span></label>
+  <label title="The tab's audio. With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio</span>
+    <select id="audioFormat">
+      <option value="mp3">MP3 — plays everywhere (~22 MB/h)</option>
+      <option value="webm">WebM/Opus — smallest (~15 MB/h)</option>
+    </select>
+  </label>
   <button id="saveBtn">Start recording</button>
   <div id="saveInfo"></div>
   <div class="hint">Files go to Downloads/ru-en-subtitles/ · <a id="openFolder">open folder</a></div>
