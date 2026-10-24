@@ -1,6 +1,6 @@
 const DEFAULTS = {
   server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
-  saveMode: "off", saveFormat: "md", learn: false, bgOpacity: 0.88,
+  saveMode: "off", saveFormat: "md", saveTranscript: true, saveAudio: false, learn: false, bgOpacity: 0.88,
 };
 const $ = (id) => document.getElementById(id);
 const bg = (m) => chrome.runtime.sendMessage({ target: "background", ...m });
@@ -15,6 +15,8 @@ $("showRu").checked = settings.showRu;
 $("hideEn").checked = settings.hideEn;
 $("saveMode").value = settings.saveMode;
 $("saveFormat").value = settings.saveFormat;
+$("saveTranscript").checked = settings.saveTranscript;
+$("saveAudio").checked = settings.saveAudio;
 $("learn").checked = settings.learn;
 $("bgOpacity").value = Math.round(settings.bgOpacity * 100);
 $("bgOpacityVal").textContent = $("bgOpacity").value + "%";
@@ -31,11 +33,15 @@ async function refreshSave(capturingHere) {
   const s = await bg({ type: "save-status" });
   const btn = $("saveBtn");
   btn.style.display = settings.saveMode === "manual" ? "" : "none";
-  btn.disabled = !capturingHere && !s.active;
-  btn.textContent = s.active ? `Stop & save (${s.count})` : "Start saving";
+  const nothing = !settings.saveTranscript && !settings.saveAudio;
+  btn.disabled = (!capturingHere || nothing) && !s.active;
+  btn.textContent = s.active ? "Stop & save" : "Start recording";
   btn.classList.toggle("on", s.active);
-  if (s.active) $("saveInfo").textContent = `● Saving… ${s.count} sentence${s.count === 1 ? "" : "s"} so far`;
-  else if (settings.saveMode === "auto") $("saveInfo").textContent = "Saved automatically when subtitles stop.";
+  $("saveFormat").disabled = !settings.saveTranscript;
+  const what = [s.transcript && `${s.count} sentence${s.count === 1 ? "" : "s"}`, s.audio && "audio"].filter(Boolean).join(" + ");
+  if (s.active) $("saveInfo").textContent = `⏺ Recording… ${what}`;
+  else if (settings.saveMode !== "off" && nothing) $("saveInfo").textContent = "Tick Transcript and/or Audio.";
+  else if (settings.saveMode === "auto") $("saveInfo").textContent = "Every session is saved automatically when subtitles stop.";
   else if (settings.saveMode === "manual") $("saveInfo").textContent = capturingHere ? "" : "Start subtitles first.";
   else $("saveInfo").textContent = "";
 }
@@ -45,7 +51,7 @@ $("saveBtn").onclick = async () => {
   if (s.active) {
     const r = await bg({ type: "save-stop" });
     await refresh();
-    $("saveInfo").textContent = r && r.saved ? `Saved ${r.count} sentences → ${r.filename}` : "Nothing to save yet.";
+    $("saveInfo").textContent = r && r.saved ? `Saved → ${r.files.map((f) => f.split("/").pop()).join(", ")}` : "Nothing to save yet.";
   } else {
     await bg({ type: "save-start" });
     refresh();
@@ -65,7 +71,7 @@ $("toggle").onclick = async () => {
   refresh();
 };
 
-for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "learn"]) {
+for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "learn"]) {
   $(id).onchange = async () => {
     settings[id] = $(id).type === "checkbox" ? $(id).checked : $(id).type === "number" ? Number($(id).value) : $(id).value;
     await chrome.storage.sync.set({ [id]: settings[id] });

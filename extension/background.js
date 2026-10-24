@@ -6,6 +6,8 @@ const DEFAULTS = {
   server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
   saveMode: "off", // off | manual | auto
   saveFormat: "md", // md | srt | txt | json
+  saveTranscript: true, // what a recording keeps: the transcript (EN + RU)…
+  saveAudio: false, //   …and/or the class audio (.webm)
   learn: false, // learning mode: color-match Russian words with their translation
   bgOpacity: 0.88, // subtitle box background
 };
@@ -27,15 +29,25 @@ async function getRec() {
 
 async function notifySaving(tabId) {
   const rec = await getRec();
-  chrome.tabs.sendMessage(tabId, { type: "saving", on: !!rec, count: rec ? rec.entries.length : 0 }).catch(() => {});
+  chrome.tabs.sendMessage(tabId, {
+    type: "saving", on: !!rec, count: rec ? rec.entries.length : 0,
+    transcript: !!rec?.wantTranscript, audio: !!rec?.wantAudio,
+  }).catch(() => {});
 }
 
 const beginSaving = (tabId) => serial(async () => {
   if (await getRec()) return;
+  const { saveTranscript, saveAudio } = await getSettings();
+  if (!saveTranscript && !saveAudio) return; // nothing selected to keep
   const tab = await chrome.tabs.get(tabId);
   let site = "tab";
   try { site = new URL(tab.url).hostname || "tab"; } catch {}
-  await chrome.storage.session.set({ rec: { tabId, site, url: tab.url, title: tab.title, startedAt: Date.now(), entries: [] } });
+  const rec = {
+    tabId, site, url: tab.url, title: tab.title, startedAt: Date.now(), entries: [],
+    wantTranscript: !!saveTranscript, wantAudio: !!saveAudio,
+  };
+  await chrome.storage.session.set({ rec });
+  if (rec.wantAudio) await chrome.runtime.sendMessage({ target: "offscreen", type: "rec-start" }).catch(() => {});
   await notifySaving(tabId);
 });
 
@@ -47,24 +59,58 @@ const addEntry = (e) => serial(async () => {
   await notifySaving(rec.tabId);
 });
 
+/** Resolves when a download has finished (the offscreen blob: URL must live until then). */
+function downloadDone(id, timeoutMs = 120000) {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => { chrome.downloads.onChanged.removeListener(on); resolve(false); }, timeoutMs);
+    function on(d) {
+      if (d.id !== id || !d.state || d.state.current === "in_progress") return;
+      clearTimeout(t);
+      chrome.downloads.onChanged.removeListener(on);
+      resolve(d.state.current === "complete");
+    }
+    chrome.downloads.onChanged.addListener(on);
+  });
+}
+
 const finishSaving = () => serial(async () => {
   const rec = await getRec();
   if (!rec) return null;
   await chrome.storage.session.remove("rec");
   await notifySaving(rec.tabId);
-  if (!rec.entries.length) return { saved: false, reason: "nothing was said" };
   rec.endedAt = Date.now();
-  const { saveFormat } = await getSettings();
-  const format = FORMATS[saveFormat] ? saveFormat : "md";
-  const filename = fileName(rec, format);
-  await chrome.downloads.download({
-    url: dataUrl(render(rec, format), FORMATS[format].mime),
-    filename,
-    conflictAction: "uniquify",
-    saveAs: false,
-  });
-  chrome.tabs.sendMessage(rec.tabId, { type: "saved", filename, count: rec.entries.length }).catch(() => {});
-  return { saved: true, filename, count: rec.entries.length };
+  const files = [];
+
+  if (rec.wantAudio) {
+    const audio = await chrome.runtime.sendMessage({ target: "offscreen", type: "rec-stop" }).catch(() => null);
+    if (audio && audio.url) {
+      const filename = fileName(rec, "md").replace(/\.md$/, ".webm");
+      const id = await chrome.downloads.download({ url: audio.url, filename, conflictAction: "uniquify", saveAs: false });
+      await downloadDone(id);
+      chrome.runtime.sendMessage({ target: "offscreen", type: "rec-free", url: audio.url }).catch(() => {});
+      const [item] = await chrome.downloads.search({ id }); // Chrome may have renamed it ("… (1).webm")
+      const saved = item && item.filename ? item.filename.split(/[\\/]/).pop() : filename.split("/").pop();
+      rec.audioFile = saved;
+      files.push("ru-en-subtitles/" + saved);
+    }
+  }
+
+  if (rec.wantTranscript && rec.entries.length) {
+    const { saveFormat } = await getSettings();
+    const format = FORMATS[saveFormat] ? saveFormat : "md";
+    const filename = fileName(rec, format);
+    await chrome.downloads.download({
+      url: dataUrl(render(rec, format), FORMATS[format].mime),
+      filename,
+      conflictAction: "uniquify",
+      saveAs: false,
+    });
+    files.push(filename);
+  }
+
+  if (!files.length) return { saved: false, reason: "nothing was said" };
+  chrome.tabs.sendMessage(rec.tabId, { type: "saved", files, count: rec.entries.length }).catch(() => {});
+  return { saved: true, files, count: rec.entries.length };
 });
 
 // ---------- page script ----------
@@ -113,10 +159,10 @@ async function start(tabId, streamId) {
 
 async function stop() {
   const cur = await state();
+  await finishSaving(); // first: the audio recorder lives in the offscreen document
   await chrome.storage.session.remove("capture");
   try { await chrome.runtime.sendMessage({ target: "offscreen", type: "stop" }); } catch {}
   try { await chrome.offscreen.closeDocument(); } catch {}
-  await finishSaving(); // manual or auto: whatever was recorded is written out, never lost
   if (cur) {
     chrome.tabs.sendMessage(cur.tabId, { type: "overlay-hide" }).catch(() => {});
     chrome.action.setBadgeText({ text: "", tabId: cur.tabId });
@@ -132,7 +178,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case "status": return reply(await state());
       case "save-status": {
         const rec = await getRec();
-        return reply({ active: !!rec, count: rec ? rec.entries.length : 0, startedAt: rec?.startedAt });
+        return reply({ active: !!rec, count: rec ? rec.entries.length : 0, startedAt: rec?.startedAt, audio: !!rec?.wantAudio, transcript: !!rec?.wantTranscript });
       }
       case "save-start": {
         const cur = await state();

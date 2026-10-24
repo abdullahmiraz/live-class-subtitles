@@ -45,6 +45,7 @@ export function toMarkdown(t) {
     `- Site: ${t.url || t.site}`,
     `- Date: ${new Date(t.startedAt).toLocaleString()}`,
     `- Sentences: ${t.entries.length}`,
+    ...(t.audioFile ? [`- Audio: ${t.audioFile}`] : []),
     "",
   ];
   const body = t.entries.map((e) => `**[${clock(e.start - t.startedAt)}]** ${e.en}  \n<sub>${ruLine(e)}</sub>\n`);
@@ -73,6 +74,7 @@ export function toJson(t) {
       site: t.site,
       url: t.url,
       title: t.title,
+      audioFile: t.audioFile ?? null,
       startedAt: new Date(t.startedAt).toISOString(),
       endedAt: new Date(t.endedAt ?? Date.now()).toISOString(),
       entries: t.entries.map((e) => ({

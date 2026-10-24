@@ -1,5 +1,8 @@
-// Offscreen document: captures the tab, keeps it audible, streams 16 kHz PCM to the local server.
+// Offscreen document: captures the tab, keeps it audible, streams 16 kHz PCM to the local server,
+// and (optional) records the tab audio to Opus/WebM while a class is being recorded.
+import { addWebmDuration } from "./webm-duration.js";
 let media, playCtx, capCtx, ws, settings, tabId, reconnectTimer, wsOpenedAt = 0, stopped = true;
+let recorder = null, recChunks = [], recWanted = false, recStartedAt = 0;
 
 const send = (m) => chrome.runtime.sendMessage({ target: "background", ...m }).catch(() => {});
 
@@ -47,10 +50,44 @@ async function start(streamId) {
   };
   media.getAudioTracks()[0].onended = () => send({ type: "ended" });
   connect();
+  if (recWanted) startRecording(); // "record" was asked for before capture was ready
+}
+
+// ---------- audio recording ----------
+function startRecording() {
+  recWanted = true;
+  if (!media || recorder) return;
+  recChunks = [];
+  // the full-quality tab stream (not the 16 kHz recognition copy); Opus 32 kb/s ≈ 15 MB per hour
+  recorder = new MediaRecorder(media, { mimeType: "audio/webm;codecs=opus", audioBitsPerSecond: 32000 });
+  recorder.ondataavailable = (e) => e.data.size && recChunks.push(e.data);
+  recorder.start(10000); // a chunk every 10 s
+  recStartedAt = Date.now();
+}
+
+/** Stops the recorder; resolves to {url, bytes} (a blob: URL the background can download) or null. */
+function stopRecording() {
+  recWanted = false;
+  const r = recorder;
+  recorder = null;
+  if (!r) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    r.onstop = async () => {
+      const chunks = recChunks;
+      recChunks = [];
+      if (!chunks.length) return resolve(null);
+      // Chrome leaves out the length: patch it into the header so players can show it and seek
+      const first = addWebmDuration(new Uint8Array(await chunks[0].arrayBuffer()), Date.now() - recStartedAt);
+      const blob = new Blob([first, ...chunks.slice(1)], { type: "audio/webm" });
+      resolve({ url: URL.createObjectURL(blob), bytes: blob.size });
+    };
+    r.stop();
+  });
 }
 
 function stop() {
   stopped = true;
+  if (recorder) { recorder.ondataavailable = null; recorder.stop(); recorder = null; } // background saves first; this is a safety net
   clearTimeout(reconnectTimer);
   try { ws && ws.close(); } catch {}
   media && media.getTracks().forEach((t) => t.stop());
@@ -66,6 +103,11 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     tabId = msg.tabId;
     start(msg.streamId).catch((e) => send({ type: "sub", kind: "error", ru: "", en: `Capture failed: ${e.message}` }));
   } else if (msg.type === "stop") stop();
+  else if (msg.type === "rec-start") startRecording();
+  else if (msg.type === "rec-stop") {
+    stopRecording().then(reply);
+    return true; // async reply
+  } else if (msg.type === "rec-free") URL.revokeObjectURL(msg.url);
   else if (msg.type === "settings") {
     const engineChanged = settings && (msg.settings.engine !== settings.engine || msg.settings.hideEn !== settings.hideEn || msg.settings.learn !== settings.learn);
     settings = { ...settings, ...msg.settings };

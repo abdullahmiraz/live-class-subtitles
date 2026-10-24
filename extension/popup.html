@@ -22,19 +22,19 @@
 <button id="toggle">Start on this tab</button>
 <label>Translator
   <select id="engine">
-    <option value="auto">Best available (Google → Yandex)</option>
+    <option value="auto">Auto (Yandex classic → Google)</option>
+    <option value="yandex-nmt">Yandex (classic)</option>
     <option value="google">Google</option>
     <option value="yandex">Yandex (LLM)</option>
-    <option value="yandex-nmt">Yandex (classic)</option>
   </select>
 </label>
 <label>Font size <input id="fontSize" type="number" min="12" max="60" /></label>
 <label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
 <label>Show Russian text <input id="showRu" type="checkbox" /></label>
 <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
-<label title="Each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex translation (it provides the word matching).">Learning mode: color-match words <input id="learn" type="checkbox" /></label>
+<label title="Each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex classic (it provides the word matching).">Learning mode: color-match words <input id="learn" type="checkbox" /></label>
 <fieldset>
-  <legend>Save transcript (EN + RU)</legend>
+  <legend>Record this class</legend>
   <label>Mode
     <select id="saveMode">
       <option value="off">Off</option>
@@ -42,7 +42,7 @@
       <option value="auto">Auto (every session)</option>
     </select>
   </label>
-  <label>Format
+  <label><span><input id="saveTranscript" type="checkbox" /> Transcript (EN + RU)</span>
     <select id="saveFormat">
       <option value="md">Markdown (.md)</option>
       <option value="srt">Subtitles (.srt)</option>
@@ -50,7 +50,8 @@
       <option value="json">JSON (.json)</option>
     </select>
   </label>
-  <button id="saveBtn">Start saving</button>
+  <label title="The tab's audio as Opus .webm (~15 MB per hour). With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio recording (.webm)</span><span class="hint" style="margin:0">~15 MB/hour</span></label>
+  <button id="saveBtn">Start recording</button>
   <div id="saveInfo"></div>
   <div class="hint">Files go to Downloads/ru-en-subtitles/ · <a id="openFolder">open folder</a></div>
 </fieldset>

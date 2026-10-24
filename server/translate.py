@@ -1,11 +1,12 @@
 """ru->en translation through free online endpoints (no account, no key, no local CPU).
 
-Ranked by measured accuracy on FLEURS (chrF vs human references):
-  google      65.7  Google Translate "gtx" endpoint
-  yandex      63.4  Yandex Browser endpoint (LLM-based)
-  yandex-nmt  62.6  classic Yandex neural MT (mobile app endpoint)
+Default order is the owner's choice (Yandex classic reads best to them in real classes); FLEURS chrF
+benchmark for reference: google 65.7, yandex (LLM) 63.4, yandex-nmt (classic) 62.6.
+  yandex-nmt  classic Yandex neural MT (mobile app endpoint)   <- default first
+  google      Google Translate "gtx" endpoint
+  yandex      Yandex Browser endpoint (LLM-based)
 
-translate_chain() tries them in that order; an engine that errors is skipped for COOLDOWN seconds.
+translate_chain() tries them in RANKED order; an engine that errors is skipped for COOLDOWN seconds.
 """
 import html
 import json
@@ -15,7 +16,7 @@ import urllib.request
 import uuid
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
-RANKED = ["google", "yandex", "yandex-nmt"]
+RANKED = ["yandex-nmt", "google", "yandex"]
 COOLDOWN = 60.0
 _sid = uuid.uuid4().hex
 _down_until = {}
@@ -54,27 +55,22 @@ def yandex_nmt(text):
 
 
 def yandex_aligned(text):
-    """Yandex (LLM) translation plus word alignment, for learning mode.
+    """Yandex classic translation plus word alignment (options=4), for learning mode.
     Returns (english, [[ru_start, ru_len, en_start, en_len], ...]) as character offsets."""
-    q = urllib.parse.urlencode({
-        "translateMode": "context", "context_title": "lecture", "id": f"{_sid}-0-0", "srv": "yabrowser",
-        "lang": "ru-en", "format": "html", "options": 4, "text": html.escape(text, quote=False),
-    })
-    d = _request(f"https://browser.translate.yandex.net/api/v1/tr.json/translate?{q}")
+    url = f"https://translate.yandex.net/api/v1/tr.json/translate?srv=tr-mobile&lang=ru-en&id={_sid}-00-0&options=4"
+    d = _request(url, {"text": text})  # plain-text POST: offsets map 1:1 onto `text`
     if d.get("code") != 200:
         raise RuntimeError(d)
     en = " ".join(d["text"]).strip()
     pairs = []
-    # offsets refer to the escaped/html text, so only trust them when escaping changed nothing
-    if html.escape(text, quote=False) == text and html.unescape(en) == en:
-        for chunk in (d.get("align") or [""])[0].split(","):
-            try:
-                src, dst = chunk.split("-")
-                (rs, rl), (es, el) = (map(int, src.split(":")), map(int, dst.split(":")))
-                pairs.append([rs, rl, es, el])
-            except ValueError:
-                continue
-    return html.unescape(en), pairs
+    for chunk in (d.get("align") or [""])[0].split(","):
+        try:
+            src, dst = chunk.split("-")
+            (rs, rl), (es, el) = (map(int, src.split(":")), map(int, dst.split(":")))
+            pairs.append([rs, rl, es, el])
+        except ValueError:
+            continue
+    return en, pairs
 
 
 ENGINES = {"google": google, "yandex": yandex, "yandex-nmt": yandex_nmt}

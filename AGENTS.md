@@ -5,7 +5,7 @@ Live Russian → English subtitles for any Chrome tab. A Chrome MV3 extension ca
 ## Hard constraints (the owner's requirements, do not violate)
 - **Free forever.** No paid APIs, trials, API keys or accounts.
 - **Light on the PC.** No heavy local models. Speech recognition is the *only* local ML, because no free online Russian speech-to-text exists. Never add local translation models (they were benchmarked and removed).
-- **Translation is online only**, ranked by measured accuracy: `google` → `yandex` (LLM) → `yandex-nmt`.
+- **Translation is online only.** Default order is the owner's choice: `yandex-nmt` (Yandex classic) → `google` → `yandex` (LLM). Google scores highest on FLEURS, but the owner prefers Yandex classic in real classes. Keep their order. Learning mode uses Yandex classic's word alignment.
 - **Never commit** models, `.venv`, transcripts, recordings, or anything with secrets. All are in `.gitignore`.
 - Target platform: Linux desktop (PipeWire), Google Chrome 138+. The owner's PC is an Intel Xeon with an AMD GPU, no CUDA.
 
@@ -21,8 +21,9 @@ extension/                   Chrome MV3 extension (no build step, plain JS)
   content.js                 shadow-DOM overlay: history (newest at bottom, scrollback, "↓ new"), LIVE line,
                              resize grip, compact mode, A−/A+, bg opacity, "CC" pill, learning-mode word colors
   transcript.js              pure transcript formatters (md/srt/txt/json) + data: URL; tested by extension/tests
+  webm-duration.js           inserts the Duration Chrome's MediaRecorder leaves out of WebM; tested by extension/tests
   popup.html / popup.js      start/stop + settings (chrome.storage.sync): engine, fontSize, bgOpacity, showRu, hideEn,
-                             learn, saveMode (off|manual|auto), saveFormat (md|srt|txt|json)
+                             learn, saveMode (off|manual|auto), saveFormat (md|srt|txt|json), saveTranscript, saveAudio
 server/
   server.py                  WebSocket ws://127.0.0.1:8765/<label>?engine=<auto|google|yandex|yandex-nmt>&hide_en=<0|1>&learn=<0|1>
                              (writes nothing to disk unless started with --save-transcripts)
@@ -62,7 +63,8 @@ Load the extension: `chrome://extensions` → Developer mode → Load unpacked �
 - tabCapture mutes the tab. offscreen.js plays it back through a second AudioContext; recognition uses a separate 16 kHz AudioContext.
 - GigaAM writes English speech in Latin letters. `looks_english()` (>50% Latin letters) routes those sentences to Whisper-tiny, while mixed RU sentences with English terms stay Russian.
 - **Saving lives in the extension**, not the server. background.js buffers finals in `chrome.storage.session` (`rec`), serialized through a promise chain, and downloads via `chrome.downloads` with a `data:` URL (MV3 service workers have no `URL.createObjectURL`). Stop (button, shortcut, tab close) always flushes the file.
-- **Yandex word alignment**: the browser endpoint with `options=4` returns `align: ["s:l-s:l,…"]` (char offsets, first entry = whole sentence). Offsets refer to the html-escaped text, so they're only used when escaping changes nothing.
+- **Yandex word alignment**: `options=4` returns `align: ["s:l-s:l,…"]` (char offsets, first entry = whole sentence). We use the classic tr-mobile POST endpoint (plain text, so offsets map 1:1). The browser/LLM endpoint's offsets refer to html-escaped text.
+- **Audio recording** runs in the offscreen document (MediaRecorder on the full-quality tab stream, Opus 32 kb/s, 10 s chunks). The background asks for a blob: URL (`rec-stop`), downloads it and waits for completion before closing the offscreen doc, so `stop()` calls `finishSaving()` first. Chrome's WebM has no Duration, so `webm-duration.js` patches it in. The real (possibly "(1)"-renamed) filename comes from `chrome.downloads.search`.
 - **Reloading the extension orphans its content scripts**: their box stays on the page, frozen, and Chrome doesn't inject the new content.js into already-open tabs. background.js `ensureContent()` pings the tab and injects content.js via `chrome.scripting` when missing. content.js removes leftover boxes on load and runs a watchdog that removes its own box once `chrome.runtime.id` is gone.
 - Overlay status comes from `chrome.storage.session.conn` (sent with overlay-show). Any arriving subtitle also marks it live.
 - Flexbox: the scrollable history needs `min-height: 0`, or the box grows past its set height.

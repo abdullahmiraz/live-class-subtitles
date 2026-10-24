@@ -5,9 +5,9 @@
 Live English subtitles for any Chrome tab playing Russian speech (online classes, YouTube, Meet, Zoom web…). No accounts, no API keys, no paid services.
 
 - **Speech recognition**: runs on your PC (GigaAM-v3 by Sber, the most accurate open Russian model). Light: it processes speech about 25× faster than real time on 4 CPU threads, and uses no CPU when nobody is speaking.
-- **Translation**: online only, through the free Google / Yandex web endpoints (no account, no key, no CPU). They're ranked by measured accuracy: **Google → Yandex (LLM) → Yandex (classic)**. If one fails, the next takes over automatically.
+- **Translation**: online only, through the free Yandex / Google web endpoints (no account, no key, no CPU). Default order: **Yandex classic → Google → Yandex LLM** (Yandex classic reads best in real classes; benchmark scores below). If one fails, the next takes over automatically.
 - **English sentences**: if the speaker switches to English, that sentence is written down as said (Whisper-tiny) instead of being mistranslated. You can hide those sentences with a popup switch. Russian sentences with a few English words are always kept.
-- **Save transcripts (EN + RU)**: only if you choose it. Pick **Off** (default), **Manual** (Start/Stop saving button), or **Auto** (every session), in Markdown, SRT subtitles, plain text or JSON. Files go to `Downloads/ru-en-subtitles/`.
+- **Record a class**: keep the **transcript (EN + RU)**, the **audio**, or both, only if you choose it. Modes are **Off** (default), **Manual** (Start recording / Stop & save) and **Auto** (every session). Transcripts come as Markdown, SRT subtitles, plain text or JSON. Audio is the tab's sound as Opus `.webm` (~15 MB/hour) with a proper duration, so players can seek. An `.srt` plus a `.webm` from the same session play together in VLC/mpv. Files go to `Downloads/ru-en-subtitles/`.
 - **Learning mode**: each Russian word and its English translation get the **same color**, and hovering a word highlights its pair. It uses Yandex's word alignment, so you learn as you read instead of only translating.
 - **Comfortable subtitle box**: newest sentence at the bottom (like Meet/Teams captions), with the latest one highlighted and older ones fading. A separate **LIVE** line shows the sentence being spoken. You can scroll back through history, and a "↓ new" button appears if you scrolled up. The box is resizable (min 320 px), has compact/expanded modes, A−/A+ text size and adjustable background opacity, and ✕ shrinks it to a "CC" pill. Motion is gentle and respects "reduce motion".
 
@@ -23,7 +23,7 @@ Requirements: Linux (tested on Ubuntu with PipeWire), Google Chrome 138+, Python
    ```
 2. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick the `extension/` folder (once; after code updates click the reload ↻ icon).
 3. On the class tab: click the extension icon → **Start on this tab** (or press **Alt+Shift+Y**). Drag the subtitle box anywhere; it follows fullscreen video.
-4. Popup settings: translator (Best available = Google → Yandex), font size, background opacity, show/hide Russian, hide sentences spoken in English, **learning mode**, and **save transcript** (Off / Manual / Auto + format).
+4. Popup settings: translator (Auto = Yandex classic → Google), font size, background opacity, show/hide Russian, hide sentences spoken in English, **learning mode**, and **record this class** (Off / Manual / Auto, transcript + format, audio).
 5. In the box: drag the header to move it, drag the corner to resize, use A−/A+ for text size and ▾ for compact mode. Size and position are remembered per website.
 
 Stop: click **Stop**, press Alt+Shift+Y again, or close the tab. Stop the server with Ctrl+C.
@@ -70,9 +70,9 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
 ### Translation (150 sentences, from correct Russian text; higher is better)
 | Engine | chrF | BLEU | Speed | Runs on |
 |---|---|---|---|---|
-| **Google** (default) | **65.7** | **41.2** | 1.1 s | online, free |
+| **Google** | **65.7** | **41.2** | 1.1 s | online, free |
 | Yandex (LLM) | 63.4 | 34.9 | 1.3 s | online, free |
-| Yandex (classic) | 62.6 | 37.8 | 1.3 s | online, free (5/150 failed) |
+| Yandex (classic), default by preference | 62.6 | 37.8 | 1.3 s | online, free (5/150 failed) |
 | OPUS-MT tc-big | 62.9 | 36.3 | 0.35 s | local, 235 MB (removed) |
 | Argos | 62.7 | 36.7 | 0.18 s | local, 100 MB (removed) |
 | NLLB 1.3B / MADLAD 3B | not finished (stopped to free CPU) | | | local, heavy (removed) |
@@ -104,9 +104,9 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
 ## Roadmap
 Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues?q=label%3Anext-stage)):
 - ~~Save translations (both languages) to a file~~ ✅ done (v1.1)
+- ~~Record the class audio~~ ✅ done (v1.2)
 - Learning-mode ideas: vocabulary list, Anki export, stress marks, Russian-first recall mode…
 - Auto-start on websites you list, and remember sites you've used it on.
-- Optionally record the class audio alongside the transcript.
 
 ## Credits & licenses
 Code: MIT (see [LICENSE](LICENSE)). Models are downloaded at setup, not stored in this repo:

@@ -28,13 +28,15 @@ def fake_engines(monkeypatch):
     return calls
 
 
-def test_ranked_order_and_fallback(fake_engines):
+def test_ranked_order_and_fallback(fake_engines, monkeypatch):
+    monkeypatch.setattr(translate, "RANKED", ["google", "yandex", "yandex-nmt"])
     out, used = translate.translate_chain("auto", "привет")
     assert (out, used) == ("yandex:привет", "yandex")
     assert fake_engines == ["google", "yandex"]
 
 
-def test_failed_engine_is_skipped_during_cooldown(fake_engines):
+def test_failed_engine_is_skipped_during_cooldown(fake_engines, monkeypatch):
+    monkeypatch.setattr(translate, "RANKED", ["google", "yandex", "yandex-nmt"])
     translate.translate_chain("auto", "a")
     fake_engines.clear()
     translate.translate_chain("auto", "b")
@@ -51,5 +53,5 @@ def test_empty_text(fake_engines):
     assert fake_engines == []
 
 
-def test_ranking_matches_benchmark():
-    assert translate.RANKED == ["google", "yandex", "yandex-nmt"]
+def test_default_order_is_owners_choice():
+    assert translate.RANKED == ["yandex-nmt", "google", "yandex"]  # Yandex classic first (owner's preference)

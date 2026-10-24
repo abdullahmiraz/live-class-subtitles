@@ -244,7 +244,8 @@
 
   function showStatus() {
     if (!statusEl) return;
-    statusEl.textContent = (live ? "● live" : "server offline — run start.sh") + (saving !== null ? `  ·  ⏺ saving (${saving})` : "");
+    const rec = saving && [saving.audio && "audio", saving.transcript && `${saving.count} lines`].filter(Boolean).join(" + ");
+    statusEl.textContent = (live ? "● live" : "server offline — run start.sh") + (saving ? `  ·  ⏺ recording ${rec}` : "");
     statusEl.style.color = live ? "#8fe58f" : "#ff8f8f";
   }
 
@@ -357,11 +358,11 @@
     } else if (m.type === "conn") {
       build(); live = m.ok; showStatus();
     } else if (m.type === "saving") {
-      saving = m.on ? m.count : null;
+      saving = m.on ? { count: m.count, transcript: m.transcript, audio: m.audio } : null;
       if (host) showStatus();
     } else if (m.type === "saved") {
       build();
-      statusEl.textContent = `✔ saved ${m.count} sentences → Downloads/${m.filename}`;
+      statusEl.textContent = `✔ saved → Downloads/${m.files.map((f) => f.split("/").pop()).join(" + ")}`;
       statusEl.style.color = "#8fe58f";
       clearTimeout(savedTimer);
       savedTimer = setTimeout(showStatus, 6000);
