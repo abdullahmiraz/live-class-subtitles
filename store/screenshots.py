@@ -189,7 +189,7 @@ async def main(subs):
             await c.shot(pt, ps, "raw-subtitles.png")
 
             # 4) popup tabs
-            await c.send("Emulation.setDeviceMetricsOverride", {"width": 316, "height": 640, "deviceScaleFactor": 2, "mobile": False}, xs)
+            await c.send("Emulation.setDeviceMetricsOverride", {"width": 316, "height": 860, "deviceScaleFactor": 2, "mobile": False}, xs)
             for tab in ("basic", "advanced", "extra"):
                 await c.js(xs, f"document.querySelector('[data-tab={tab}]').click()")
                 await asyncio.sleep(0.4)

@@ -8,7 +8,7 @@ Upload: `./package.sh` → `dist/live-class-subtitles-<version>.zip` →
 **Name** (from manifest, max 75 chars): Live Class Subtitles – Russian to 38 Languages
 
 **Summary** (manifest `description`, max 132 chars):
-> Live subtitles for Russian audio in any tab: English or 37 other languages. Speech recognition runs on your own PC.
+> Live subtitles for Russian audio in any tab: English or 37 other languages. Nothing to install. Learn Russian as you listen.
 
 **Category:** Education · **Language:** English
 
@@ -16,30 +16,28 @@ Upload: `./package.sh` → `dist/live-class-subtitles-<version>.zip` →
 ```
 Live subtitles for Russian audio in any Chrome tab (online classes, lectures, Zoom/Meet in the browser, YouTube, podcasts) in English or 37 other languages: Spanish, German, French, Arabic, Hindi, Bengali, Urdu, Turkish, Chinese, Kazakh, Uzbek and more.
 
-Free. No account. No API keys. Your audio never leaves your computer.
+Free. No account. No API keys. Nothing else to install: works on Windows, Mac, Linux and ChromeOS.
 
 HOW IT WORKS
-A small free companion server runs on your PC and turns the Russian speech into text (GigaAM-v3, one of the most accurate open Russian models). The text is translated by free Yandex or Google translation. The extension shows it as you listen.
+Click the icon (or press Alt+Shift+Y) on the tab with your class. Chrome's built-in speech recognition turns the Russian into text and a free translator (Yandex or Google) translates it as you listen.
 
 • Two views: a resizable panel with history, or YouTube-style subtitles over the video (also in fullscreen)
-• Live text while the teacher speaks, then the accurate sentence a moment later
+• Live text while the teacher speaks, then the finished sentence
 • Record a class: transcript (Markdown, SRT, TXT, JSON) and/or audio (MP3 or WebM)
-• Sentences spoken in English are written down as they were said, not "translated"
-• Auto-start offer on your class sites, keyboard shortcut Alt+Shift+Y
-• Microphone mode for in-person classes
+• Sentences spoken in English are kept as said (and translated if your subtitles aren't English)
+• Auto-start offer on your class sites, microphone mode for in-person classes
 
 LEARN RUSSIAN WHILE YOU LISTEN
-• Color-matched words: each Russian word and its English translation share a color
-• Hover any Russian word: dictionary form, grammar (case, tense, aspect…) and meaning
-• Save words, mark the ones you know, export your vocabulary to Anki
-• Russian-first mode: the English stays blurred until you hover
+• Color-matched words: each Russian word and its translation share a color
+• Hover any Russian word for its meaning; save words, mark the ones you know, export to Anki
+• Russian-first mode: the translation stays blurred until you hover
 
-SETUP (once, Linux)
-After installing, a setup page shows a one-line command that installs the companion server. It starts by itself at login and uses ~40 MB of memory while idle.
+MORE PRIVACY OR MORE ACCURACY (optional)
+• On this computer: Chrome downloads a Russian speech pack once, then the audio never leaves your PC.
+• Companion app (free, Windows/Mac/Linux): GigaAM, one of the most accurate open Russian speech models, on your own PC, with punctuation and grammar in word cards. Windows: download and double-click; Mac/Linux: paste one line in Terminal.
 
-Requires: Linux desktop with Chrome 116+. Source, help and issues: https://github.com/abdullahmiraz/live-class-subtitles
-Made by Abdullah Miraz: https://www.miraz.dev/about
-Questions or ideas: https://github.com/abdullahmiraz/live-class-subtitles/issues (or LinkedIn: https://www.linkedin.com/in/abdullahmiraz/)
+Source, help and issues: https://github.com/abdullahmiraz/live-class-subtitles
+Made by Abdullah Miraz: https://www.miraz.dev/about · LinkedIn: https://www.linkedin.com/in/abdullahmiraz/
 ```
 
 **Graphics** (in `store/`):
@@ -59,18 +57,18 @@ Questions or ideas: https://github.com/abdullahmiraz/live-class-subtitles/issues
 | Permission | Justification |
 |---|---|
 | tabCapture | Captures the audio of the tab the user starts subtitles on (only after clicking the icon or pressing the shortcut) so the speech can be recognized and translated. |
-| offscreen | Hosts the audio capture, recognition stream and optional recording in an offscreen document, because MV3 service workers can't use audio APIs. |
+| offscreen | Hosts the audio capture, Chrome's speech recognition and the optional recording in an offscreen document, because MV3 service workers can't use audio APIs. |
+| Host permissions: translate.googleapis.com, translate.yandex.net, browser.translate.yandex.net | Sends the recognized sentences to these free translation services and receives the translation. No other sites. |
 | activeTab | Shows the subtitle overlay on the tab where the user started subtitles, without access to any other site. |
 | scripting | Injects the subtitle overlay script into that tab on demand, instead of running on every website. |
 | storage | Saves the user's settings, vocabulary list, known words and remembered sites. |
 | downloads | Saves recordings and transcripts the user explicitly asked for to the Downloads folder. |
 | Optional host permissions (`*://*/*`) | Asked for one site at a time, only when the user turns on auto-start for that site, so the extension can notice when it plays sound and offer to start subtitles. |
 
-**Remote code:** No. All code is in the package. (The extension talks to a local companion server over `ws://127.0.0.1`; it sends audio and receives text, never code.)
+**Remote code:** No. All code is in the package. It calls translation APIs (JSON text in and out) and, only if the user installed the optional companion app, a local server on `ws://127.0.0.1` (audio in, text out). Neither ever returns code.
 
 **Data usage:**
-- Tick **Website content**: the audio of the tab, processed to show subtitles.
-  - Before ticking it, re-read the current form wording. Data processed only on-device or in your own local server is often not "collected". If the form says so, tick nothing.
+- Tick **Website content**. That covers the tab audio, which Chrome's built-in speech recognition sends to Google's speech service by default, and the recognized text, which goes to the translator. The developer receives none of it.
 - Certify all three:
   - not sold to third parties
   - not used for purposes unrelated to the single purpose
@@ -84,8 +82,6 @@ Questions or ideas: https://github.com/abdullahmiraz/live-class-subtitles/issues
 
 ## Notes for reviewers (Test instructions field)
 ```
-The extension needs its free companion server on the same computer (it does the speech recognition locally).
-Install on Linux: curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash
-Then open a tab with Russian speech (e.g. any Russian YouTube lecture), click the extension icon → Start.
-Without the server the popup shows "Local server: not running · set it up".
+No setup is needed: open a tab with Russian speech (e.g. any Russian YouTube lecture), click the extension icon → "Start on this tab". Subtitles appear within a few seconds (Chrome's built-in speech recognition, needs internet).
+The optional companion app (popup → Advanced → Speech recognition → Companion app) is not required for any of the reviewed functionality.
 ```

@@ -2,9 +2,9 @@
   "manifest_version": 3,
   "name": "Live Class Subtitles – Russian to 38 Languages",
   "short_name": "Live Class Subtitles",
-  "version": "1.6.0",
-  "minimum_chrome_version": "116",
-  "description": "Live subtitles for Russian audio in any tab: English or 37 other languages. Speech recognition runs on your own PC.",
+  "version": "2.0.0",
+  "minimum_chrome_version": "135",
+  "description": "Live subtitles for Russian audio in any tab: English or 37 other languages. Nothing to install. Learn Russian as you listen.",
   "homepage_url": "https://github.com/abdullahmiraz/live-class-subtitles",
   "permissions": [
     "tabCapture",
@@ -13,6 +13,11 @@
     "activeTab",
     "downloads",
     "scripting"
+  ],
+  "host_permissions": [
+    "https://translate.googleapis.com/*",
+    "https://translate.yandex.net/*",
+    "https://browser.translate.yandex.net/*"
   ],
   "optional_host_permissions": [
     "*://*/*"

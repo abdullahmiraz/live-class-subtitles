@@ -360,7 +360,7 @@ async def main():
     SAVE_TRANSCRIPTS = a.save_transcripts
     THREADS, IDLE_UNLOAD = a.threads, a.unload_after
     if not FINAL_MODEL_OK:
-        raise SystemExit("speech models missing: run ./download_models.sh (start.sh does it for you)")
+        raise SystemExit("speech models missing: run download_models.py (the installer does it for you)")
     print(f"listening on ws://{a.host}:{a.port} (speech models load when a client connects)", flush=True)
     async with websockets.serve(handler, a.host, a.port, max_size=2**22):
         await asyncio.Future()

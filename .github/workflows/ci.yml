@@ -34,7 +34,9 @@ jobs:
             const m = require("./extension/manifest.json");
             for (const p of ["tabCapture", "offscreen", "storage"]) if (!m.permissions.includes(p)) throw new Error("missing " + p);
             if (m.manifest_version !== 3) throw new Error("not MV3");
-            if (m.content_scripts || m.host_permissions) throw new Error("no always-on site access: inject on demand (store review)");
+            if (m.content_scripts) throw new Error("no always-on page script: inject on demand (store review)");
+            const allowed = ["https://translate.googleapis.com/*", "https://translate.yandex.net/*", "https://browser.translate.yandex.net/*"];
+            for (const h of m.host_permissions || []) if (!allowed.includes(h)) throw new Error("unexpected host permission " + h);
             const fs = require("fs");
             for (const f of Object.values(m.icons)) if (!fs.existsSync("extension/" + f)) throw new Error("missing icon " + f);
             console.log("manifest ok:", m.name, m.version);'
@@ -43,4 +45,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n start.sh && bash -n install-autostart.sh && bash -n install.sh && bash -n package.sh && bash -n server/download_models.sh
+      - run: bash -n start.sh && bash -n install-autostart.sh && bash -n install.sh && bash -n package.sh

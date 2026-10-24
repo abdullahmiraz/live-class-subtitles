@@ -1,49 +1,91 @@
 <!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width" />
-<title>Live Class Subtitles · Setup</title>
+<title>Live Class Subtitles · Welcome</title>
 <style>
-  body { font: 15px/1.55 system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 20px; color: #222; }
+  body { font: 15px/1.55 system-ui, sans-serif; max-width: 660px; margin: 44px auto; padding: 0 20px; color: #222; }
   h1 { font-size: 24px; margin-bottom: 4px; }
   .lead { color: #555; margin-top: 0; }
+  .ready { background: #e8f5ec; border: 1px solid #b7e1c2; border-radius: 10px; padding: 12px 16px; margin: 18px 0; }
+  .ready b { color: #137333; }
   h2 { font-size: 17px; margin: 28px 0 6px; }
   .n { display: inline-block; width: 24px; height: 24px; border-radius: 50%; background: #1a73e8; color: #fff;
     text-align: center; font-size: 14px; line-height: 24px; margin-right: 6px; }
-  pre { white-space: pre-wrap; word-break: break-all; background: #f3f4f6; border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; margin: 8px 0; }
-  button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; border-radius: 6px; background: #1a73e8; color: #fff; cursor: pointer; }
-  #status { font-weight: 600; }
-  .ok { color: #188038; } .bad { color: #c5221f; }
+  .opt { border: 1px solid #e3e3e3; border-radius: 10px; padding: 4px 16px 12px; margin: 12px 0; }
+  .opt h3 { font-size: 15px; margin: 10px 0 4px; }
+  .tag { font-size: 11px; font-weight: 600; color: #1a73e8; background: #e8f0fe; border-radius: 10px; padding: 1px 8px; margin-left: 6px; vertical-align: 1px; }
+  pre { white-space: pre-wrap; word-break: break-all; background: #f3f4f6; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin: 8px 0; }
+  .btn { display: inline-block; font: inherit; font-size: 13px; padding: 6px 12px; border: 0; border-radius: 6px; background: #1a73e8;
+    color: #fff; cursor: pointer; text-decoration: none; }
+  .btn.alt { background: #5f6368; }
+  .ok { color: #188038; font-weight: 600; } .bad { color: #c5221f; font-weight: 600; }
   .hint { color: #777; font-size: 13px; }
   kbd { background: #eee; border: 1px solid #ccc; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 13px; }
   a { color: #1a73e8; }
+  .os { display: none; }
+  .os.on { display: block; }
+  details summary { cursor: pointer; color: #1a73e8; font-size: 13px; }
 </style>
 <h1>Live Class Subtitles</h1>
-<p class="lead">Live subtitles for Russian audio in any tab, in English or 37 other languages. Free, no account, and the speech recognition runs on your
-  own computer.</p>
+<p class="lead">Live subtitles for Russian audio in any tab, in English or 37 other languages. Free, no account.</p>
 
-<h2><span class="n">1</span>Install the companion (once)</h2>
-<p>Chrome can't run speech recognition by itself, so a small free server runs on your PC. On Linux, paste this into a
-  terminal:</p>
-<pre id="cmd">curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash</pre>
-<button id="copy">Copy</button>
-<p class="hint">It downloads the speech models once (~350 MB) and starts by itself at login. It uses ~40 MB of memory
-  while idle; the models load only while subtitles are on. Manual setup and source:
-  <a href="https://github.com/abdullahmiraz/live-class-subtitles#readme" target="_blank">GitHub</a>.</p>
-<p>Companion status: <span id="status">checking…</span></p>
+<div class="ready"><b>✓ You're ready. Nothing else to install.</b> Speech recognition is built into Chrome, on Windows, Mac,
+  Linux and ChromeOS.</div>
 
-<h2><span class="n">2</span>Start subtitles</h2>
-<p>Open your class or video, then click the extension icon → <b>Start</b>, or press <kbd id="key">Alt+Shift+Y</kbd>.
-  Tip: pin the icon (puzzle piece → 📌).</p>
+<h2><span class="n">1</span>Start subtitles</h2>
+<p>Open your class or video, then click the extension icon → <b>Start on this tab</b>, or press <kbd id="key">Alt+Shift+Y</kbd>.
+  Tip: pin the icon (puzzle piece 🧩 → 📌).</p>
 
-<h2><span class="n">3</span>Make it yours</h2>
-<p><b>Basic</b>: panel or YouTube-style subtitles, size, recording a class. <b>Advanced</b>: microphone, translator,
-  auto-start sites. <b>Extra</b>: learning tools (word cards, vocabulary for Anki).</p>
+<h2><span class="n">2</span>Make it yours</h2>
+<p><b>Basic</b>: subtitle language, panel or YouTube-style subtitles, size, recording a class. <b>Advanced</b>: speech engine,
+  microphone, translator, auto-start sites. <b>Extra</b>: learning tools (word cards, vocabulary for Anki). Hover any ⓘ for help.</p>
+
+<h2><span class="n">3</span>Optional: more privacy or more accuracy</h2>
+<div class="opt">
+  <h3>On this computer (private)<span class="tag">no install</span></h3>
+  <p>Chrome downloads a Russian speech pack once; then the audio never leaves your computer. Popup → <b>Advanced</b> →
+    Speech recognition → <b>On this computer</b>.</p>
+</div>
+<div class="opt" id="companion">
+  <h3>Companion app (best accuracy)<span class="tag">free · Windows · Mac · Linux</span></h3>
+  <p>Uses GigaAM, one of the most accurate open Russian speech models, on your own PC: better words, punctuation, and
+    grammar details in word cards. Install it once:</p>
+
+  <div class="os" data-os="windows">
+    <p><b>Windows:</b> download the installer, then double-click it.</p>
+    <a class="btn" href="https://github.com/abdullahmiraz/live-class-subtitles/releases/latest/download/Install-Companion-Windows.cmd">Download installer for Windows</a>
+    <p class="hint">If Windows warns "Windows protected your PC", click <b>More info → Run anyway</b> (it's a small text file;
+      <a href="https://github.com/abdullahmiraz/live-class-subtitles/blob/main/install.ps1" target="_blank">see exactly what it does</a>).
+      No admin rights needed.</p>
+    <details><summary>Or paste this into PowerShell</summary>
+      <pre id="cmd-windows">irm https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.ps1 | iex</pre>
+      <button class="btn alt" data-copy="cmd-windows">Copy</button></details>
+  </div>
+  <div class="os" data-os="mac">
+    <p><b>Mac:</b> open <b>Terminal</b> (press ⌘ Space, type "Terminal", press Enter), paste this and press Enter:</p>
+    <pre id="cmd-mac">curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash</pre>
+    <button class="btn" data-copy="cmd-mac">Copy</button>
+  </div>
+  <div class="os" data-os="linux">
+    <p><b>Linux:</b> open a terminal, paste this and press Enter:</p>
+    <pre id="cmd-linux">curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash</pre>
+    <button class="btn" data-copy="cmd-linux">Copy</button>
+  </div>
+  <div class="os" data-os="cros">
+    <p><b>ChromeOS:</b> the companion app isn't available; the built-in speech recognition works fully.</p>
+  </div>
+  <p class="hint">It downloads the speech models once (~350 MB), starts by itself when you sign in and uses ~40 MB of memory
+    while idle. Then choose popup → Advanced → Speech recognition → <b>Companion app</b>.
+    <a id="otherOs">Instructions for another system</a></p>
+  <p>Companion app status: <span id="status">checking…</span></p>
+</div>
 
 <h2>Privacy</h2>
-<p class="hint">Audio never leaves your computer: it goes only to the companion on your PC. Only the recognized text
-  is sent to a free translator (Yandex or Google) to get the translation. No accounts, no analytics.
+<p class="hint">No accounts, analytics or tracking. With "Built into Chrome", Chrome sends the class audio to Google's speech
+  service to turn it into text. "On this computer" and the companion app keep the audio on your PC. The recognized text is
+  sent to a free translator (Yandex or Google) to get the translation.
   <a href="https://github.com/abdullahmiraz/live-class-subtitles/blob/main/PRIVACY.md" target="_blank">Privacy policy</a></p>
 <h2>Help</h2>
-<p class="hint">Something not working, or an idea? <a href="https://github.com/abdullahmiraz/live-class-subtitles/issues" target="_blank">Open an issue on GitHub</a>, or message
-  me on <a href="https://www.linkedin.com/in/abdullahmiraz/" target="_blank">LinkedIn</a>.</p>
+<p class="hint">Something not working, or an idea? <a href="https://github.com/abdullahmiraz/live-class-subtitles/issues" target="_blank">Open an issue on GitHub</a>,
+  or message me on <a href="https://www.linkedin.com/in/abdullahmiraz/" target="_blank">LinkedIn</a>.</p>
 <script src="welcome.js" type="module"></script>

@@ -1,11 +1,16 @@
-// Offscreen document: captures the tab, keeps it audible, streams 16 kHz PCM to the local server,
-// and (optional) records the tab audio (MP3 or WebM) while a class is being recorded.
+// Offscreen document: captures the tab (or a microphone), keeps it audible, runs the speech engine, and
+// (optional) records the audio (MP3 or WebM) while a class is being recorded.
+// Speech engines (settings.speech): "chrome" (default) / "device" = Chrome's built-in recognition, nothing to
+// install (chrome-speech.js); "companion" = 16 kHz PCM over a WebSocket to the local GigaAM server.
 import { addWebmDuration } from "./webm-duration.js";
+import { ChromeSpeech } from "./chrome-speech.js";
 let media, playCtx, playGain, capCtx, ws, settings, tabId, reconnectTimer, wsOpenedAt = 0, stopped = true;
 let recorder = null, recChunks = [], recWanted = false, recStartedAt = 0, recFormat = "mp3";
 let mp3 = null; // { ctx, node, enc } while recording MP3
 let recStarting = false; // guards the async MP3 setup against a second start (race → doubled audio)
 let flushWaiter = null; // resolves when the server says every pending sentence was sent ("done")
+let speech = null; // ChromeSpeech while the built-in engine runs
+const useCompanion = () => settings.speech === "companion";
 
 const send = (m) => chrome.runtime.sendMessage({ target: "background", ...m }).catch(() => {});
 
@@ -39,6 +44,7 @@ function connect() {
 
 /** Ask the server to finish the sentence in progress and wait until its final arrived (max 8 s). */
 function flush() {
+  if (speech) return speech.flush().then(() => true);
   if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve(false);
   return new Promise((resolve) => {
     const t = setTimeout(() => { flushWaiter = null; resolve(false); }, 8000);
@@ -64,7 +70,18 @@ async function start(streamId) {
     playGain = playCtx.createGain();
     playCtx.createMediaStreamSource(media).connect(playGain).connect(playCtx.destination);
   }
-  // 2) separate 16 kHz context for recognition (Chrome does the resampling)
+  media.getAudioTracks()[0].onended = () => send({ type: "ended" });
+  await startEngine();
+  if (recWanted) startRecording(recFormat); // "record" was asked for before capture was ready
+}
+
+async function startEngine() {
+  if (!useCompanion()) {
+    speech = new ChromeSpeech(() => settings, send);
+    speech.start(media.getAudioTracks()[0]);
+    return;
+  }
+  // companion: a separate 16 kHz context for recognition (Chrome does the resampling)
   capCtx = new AudioContext({ sampleRate: 16000 });
   await capCtx.audioWorklet.addModule("pcm-worklet.js");
   const node = new AudioWorkletNode(capCtx, "pcm-worklet");
@@ -72,9 +89,17 @@ async function start(streamId) {
   node.port.onmessage = (e) => {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(e.data);
   };
-  media.getAudioTracks()[0].onended = () => send({ type: "ended" });
   connect();
-  if (recWanted) startRecording(recFormat); // "record" was asked for before capture was ready
+}
+
+/** Switch engines while running (settings change): finish the current sentence first. */
+async function restartEngine() {
+  await flush();
+  if (speech) { speech.stop(); speech = null; }
+  clearTimeout(reconnectTimer);
+  if (ws) { ws.intentional = true; try { ws.close(); } catch {} ws = null; }
+  if (capCtx) { capCtx.close(); capCtx = null; }
+  await startEngine();
 }
 
 // ---------- audio recording ----------
@@ -151,6 +176,7 @@ function stopRecording() {
 
 function stop() {
   stopped = true;
+  if (speech) { speech.stop(); speech = null; }
   if (recorder) { recorder.ondataavailable = null; try { recorder.stop(); } catch {} recorder = null; } // background saves first; safety net
   if (mp3) { mp3.ctx.close(); mp3 = null; }
   clearTimeout(reconnectTimer);
@@ -187,9 +213,11 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
         break;
       case "settings": {
         const changed = (k) => k in msg.settings && msg.settings[k] !== settings[k];
+        const switchEngine = settings && changed("speech");
         const reconnect = settings && (changed("engine") || changed("target") || changed("hideEn") || changed("learn"));
         settings = { ...settings, ...msg.settings };
-        if (reconnect && ws && !stopped) {
+        if (switchEngine && media && !stopped) restartEngine(); // the built-in engine reads settings live
+        else if (reconnect && ws && !stopped) {
           // finish the current sentence on the old connection, then switch right away (no "offline" flash)
           const old = ws;
           old.intentional = true;

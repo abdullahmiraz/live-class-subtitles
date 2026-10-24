@@ -1,9 +1,11 @@
 // Service worker: owns capture state, creates the offscreen document, relays subtitles to the tab,
 // and keeps the transcript being saved (chrome.storage.session, so it survives SW restarts and page reloads).
 import { FORMATS, dataUrl, fileName, render } from "./transcript.js";
+import { translateChain } from "./translate.js";
 import { autoRuleFor, forget, neededOrigins, normPattern, originsFor, recordUse, setAuto, sortedSites } from "./sites.js";
 
 const DEFAULTS = {
+  speech: "chrome", // chrome (built in, online) | device (built in, Chrome's offline Russian pack) | companion (GigaAM app)
   server: "ws://127.0.0.1:8765", engine: "auto", target: "en", // subtitle language (see langs.js) showRu: true, hideEn: false, fontSize: 26,
   saveMode: "off", // off | manual | auto
   saveFormat: "md", // md | srt | txt | json
@@ -37,6 +39,18 @@ async function serverRequest(path, params = {}, ms = 8000) {
     ws.onerror = () => end({ error: "server offline" });
     ws.onclose = () => end({ error: "server offline" });
   });
+}
+
+/** Word card. The companion adds dictionary form + grammar (pymorphy3); without it: the meaning only. */
+async function lookupWord(word) {
+  const { speech, target } = await getSettings();
+  if (speech === "companion") {
+    const r = await serverRequest("lookup", { w: word, target });
+    if (r && !r.error) return r;
+  }
+  const w = String(word || "").toLowerCase().slice(0, 60);
+  const [meaning] = await translateChain("auto", w, target || "en");
+  return meaning ? { word: w, lemma: w, pos: "", grammar: "", meaning } : { error: "translator unreachable" };
 }
 
 /** Message the offscreen document; never waits longer than `ms` (resolves to `fallback`). */
@@ -316,7 +330,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         break;
       }
       case "ended": await stop(); break;
-      case "lookup": return reply(await serverRequest("lookup", { w: msg.word, target: (await getSettings()).target }));
+      case "lookup": return reply(await lookupWord(msg.word));
       case "duck": toOffscreen({ type: "duck", on: !!msg.on }, 1000); break;
       case "sites-get": {
         const sites = await getSites();

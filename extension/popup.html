@@ -117,6 +117,17 @@
 <!-- Advanced: setup and rarely changed settings -->
 <section class="pane" id="pane-advanced">
   <fieldset>
+    <legend>Speech recognition</legend>
+    <label><span class="lbl">Engine<span class="i" tabindex="0" data-tip="Built into Chrome: works right away on any computer; Chrome sends the audio to Google's speech service. On this computer: Chrome downloads a Russian pack once, then audio never leaves your PC. Companion app: best accuracy with punctuation and grammar in word cards; needs a free app installed once.">i</span></span>
+      <select id="speech">
+        <option value="chrome">Built into Chrome</option>
+        <option value="device">On this computer (private)</option>
+        <option value="companion">Companion app (best)</option>
+      </select>
+    </label>
+    <div id="speechInfo" class="hint" style="margin-top:0"></div>
+  </fieldset>
+  <fieldset>
     <legend>Audio source</legend>
     <label><span class="lbl">Listen to<span class="i" tabindex="0" data-tip="This tab: the sound of the class tab (online classes). Microphone: for in-person classes or apps outside Chrome. Needs a one-time setup.">i</span></span>
       <select id="audioSource">
@@ -138,8 +149,8 @@
     </label>
   </fieldset>
   <fieldset>
-    <legend class="lbl">Check<span class="i" tabindex="0" data-tip="Checks that the local server is running and that each translator answers, with how long each takes.">i</span></legend>
-    <button id="testBtn" style="background:#5f6368">Test server + translators</button>
+    <legend class="lbl">Check<span class="i" tabindex="0" data-tip="Checks that speech recognition is ready and that each translator answers, with how long each takes.">i</span></legend>
+    <button id="testBtn" style="background:#5f6368">Test speech + translators</button>
     <div id="testOut" class="hint" style="white-space:pre-line"></div>
   </fieldset>
   <fieldset>
@@ -183,6 +194,6 @@
 </section>
 
 <div id="tip" role="tooltip"></div>
-<div class="srv">Local server: <span id="srv">checking…</span></div>
+<div class="srv">Speech: <span id="srv">checking…</span></div>
 <div class="hint">Shortcut: <span id="shortcut">Alt+Shift+Y</span> · <a id="shortcuts">change</a></div>
 <script src="popup.js" type="module"></script>

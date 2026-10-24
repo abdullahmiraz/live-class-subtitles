@@ -4,7 +4,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Downloaded models (fetched by server/download_models.sh)
+# Downloaded models (fetched by server/download_models.py)
 server/models/
 
 # Personal data: saved lecture transcripts and benchmark outputs

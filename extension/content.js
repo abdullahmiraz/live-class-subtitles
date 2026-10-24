@@ -23,7 +23,7 @@
 
   const MIN_W = 320, MIN_H = 120, MAX_HISTORY = 300;
   let host, root, box, histEl, liveEn, liveRu, liveWrap, statusEl, newBtn;
-  let settings = { target: "en", showRu: true, fontSize: 22, bgOpacity: 0.88, display: "panel", finalOnly: false, capStyle: "band",
+  let settings = { speech: "chrome", target: "en", showRu: true, fontSize: 22, bgOpacity: 0.88, display: "panel", finalOnly: false, capStyle: "band",
     capColor: "#ffffff", ruFirst: false, hoverCard: true, newOnly: false, readAloud: false, learn: false };
   // words marked "I know it" (dictionary forms), kept in chrome.storage.local and shared by all tabs
   let known = new Set();
@@ -297,11 +297,15 @@
     if (stick) scrollToEnd(true);
   }
 
+  const offlineText = () => settings.speech === "companion"
+    ? "companion app offline · open the extension popup for setup"
+    : "connecting to speech recognition… (needs internet)";
+
   function showStatus() {
     renderCapStatus();
     if (!statusEl) return;
     const rec = saving && [saving.audio && "audio", saving.transcript && `${saving.count} lines`].filter(Boolean).join(" + ");
-    statusEl.textContent = (live ? "● live" : "server offline · open the extension popup for setup") + (saving ? `  ·  ⏺ recording ${rec}` : "");
+    statusEl.textContent = (live ? "● live" : offlineText()) + (saving ? `  ·  ⏺ recording ${rec}` : "");
     statusEl.style.color = live ? "#8fe58f" : "#ff8f8f";
   }
 
@@ -537,7 +541,7 @@
   function renderCapStatus() {
     if (!capRoot) return;
     const row = capRoot.querySelector(".statrow");
-    const msg = errMsg || !live ? errMsg || "server offline · open the extension popup for setup" : savedMsg || (saving ? "⏺ recording" : !lastFinal && !liveCue ? "● listening…" : "");
+    const msg = errMsg || !live ? errMsg || offlineText() : savedMsg || (saving ? "⏺ recording" : !lastFinal && !liveCue ? "● listening…" : "");
     row.replaceChildren();
     if (msg) {
       const d = document.createElement("span");
@@ -698,11 +702,12 @@
     if (!lookups.has(key)) lookups.set(key, chrome.runtime.sendMessage({ target: "background", type: "lookup", word }).catch(() => ({ error: "offline" })));
     lookups.get(key).then((info) => {
       if (!cardHost || cardWord !== word) return;
-      if (!info || info.error) { lookups.delete(key); r.querySelector(".gram").textContent = "lookup needs the local server"; return; }
+      if (!info || info.error) { lookups.delete(key); r.querySelector(".gram").textContent = "couldn't look it up (no internet?)"; return; }
       r.querySelector(".lemma").textContent = info.lemma || word;
       r.querySelector(".form").textContent = info.lemma && info.lemma !== word ? `(${word})` : "";
-      r.querySelector(".gram").textContent = info.grammar || "";
+      r.querySelector(".gram").textContent = info.grammar || ""; // grammar comes from the companion app
       r.querySelector(".gram").classList.remove("dim");
+      if (!info.grammar) r.querySelector(".gram").remove();
       r.querySelector(".mean").textContent = info.meaning || "";
       const save = r.querySelector(".save"), know = r.querySelector(".know");
       chrome.storage.local.get("vocab").then(({ vocab }) => {

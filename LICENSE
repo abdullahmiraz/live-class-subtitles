@@ -8,7 +8,7 @@ https://github.com/abdullahmiraz/live-class-subtitles/issues or message the auth
 https://www.linkedin.com/in/abdullahmiraz/
 
 Third-party components keep their own licenses: extension/vendor/lame.min.js is LGPL-3.0 (see
-extension/vendor/LAMEJS-LICENSE.txt), and the speech models downloaded by server/download_models.sh
+extension/vendor/LAMEJS-LICENSE.txt), and the speech models downloaded by server/download_models.py
 are under their authors' licenses.
 
 ----------------------------------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 import { dataUrl, toAnki } from "./transcript.js";
 import { originsFor } from "./sites.js";
 import { ALIGNED, TARGETS, langName } from "./langs.js";
+import { ENGINES } from "./translate.js";
 const DEFAULTS = {
-  server: "ws://127.0.0.1:8765", engine: "auto", target: "en", showRu: true, hideEn: false, fontSize: 26,
+  speech: "chrome", server: "ws://127.0.0.1:8765", engine: "auto", target: "en", showRu: true, hideEn: false, fontSize: 26,
   saveMode: "off", saveFormat: "md", saveTranscript: true, saveAudio: false, audioFormat: "mp3", learn: false, bgOpacity: 0.88, display: "panel",
   finalOnly: false, capStyle: "band", capColor: "#ffffff", audioSource: "tab", micId: "",
   readAloud: false, ruFirst: false, hoverCard: true, newOnly: false,
@@ -44,6 +45,8 @@ document.querySelectorAll(".i").forEach((el) => {
 $("target").replaceChildren(...Object.entries(TARGETS).map(([code, name]) => new Option(name, code)));
 $("target").value = settings.target;
 if (!$("target").value) $("target").value = settings.target = "en";
+$("speech").value = settings.speech;
+if (!$("speech").value) $("speech").value = settings.speech = "chrome";
 $("engine").value = settings.engine;
 if (!$("engine").value) $("engine").value = settings.engine = "auto"; // e.g. removed "argos" option
 $("fontSize").value = settings.fontSize;
@@ -165,13 +168,31 @@ $("addBtn").onclick = () => {
 };
 // ---------- Advanced: microphone setup, Test ----------
 $("micSetup").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("mic.html") });
+const NAMES = { "yandex-nmt": "Yandex classic", google: "Google", yandex: "Yandex LLM" };
+async function testBuiltIn() {
+  $("testOut").textContent = "testing…";
+  const lines = [];
+  const st = settings.speech === "device" ? await deviceState() : await webkitSpeechRecognition.available({ langs: ["ru-RU"], processLocally: false }).catch(() => "unavailable");
+  lines.push(`${st === "available" ? "✓" : "✗"} speech recognition (${settings.speech === "device" ? "on this computer" : "Chrome"}): ${st}`);
+  for (const [name, fn] of Object.entries(ENGINES)) {
+    const t = performance.now();
+    try {
+      const out = await fn("Привет, как дела?", settings.target || "en");
+      lines.push(`${out ? "✓" : "✗"} ${NAMES[name]} ${Math.round(performance.now() - t)} ms`);
+    } catch (e) {
+      lines.push(`✗ ${NAMES[name]} — ${e.message}`);
+    }
+  }
+  $("testOut").textContent = lines.join("\n");
+}
 function offline(text) { // the companion isn't reachable: point to the setup page
   $("testOut").innerHTML = "";
   const a = Object.assign(document.createElement("a"), { textContent: "how to set it up" });
-  a.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  a.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html#companion") });
   $("testOut").append(text + " · ", a);
 }
-$("testBtn").onclick = () => {
+$("testBtn").onclick = async () => {
+  if (settings.speech !== "companion") return testBuiltIn();
   $("testOut").textContent = "testing…";
   const ws = new WebSocket(settings.server + "/selftest");
   const t = setTimeout(() => { offline("✗ local server not answering"); ws.close(); }, 15000);
@@ -180,7 +201,6 @@ $("testBtn").onclick = () => {
     const d = JSON.parse(e.data);
     const speech = String(d.speech || "");
     const lines = [`✓ local server · speech recognition ${speech.startsWith("ok") ? "✓" + (speech.includes("loads") ? " (loads on Start)" : "") : "✗ " + speech}`];
-    const NAMES = { "yandex-nmt": "Yandex classic", google: "Google", yandex: "Yandex LLM" };
     for (const [name, r] of Object.entries(d.translators || {}))
       lines.push(`${r.ok ? "✓" : "✗"} ${NAMES[name] || name} ${r.ok ? r.ms + " ms" : "— " + (r.error || "failed")}`);
     $("testOut").textContent = lines.join("\n");
@@ -233,7 +253,7 @@ $("toggle").onclick = async () => {
   refresh();
 };
 
-for (const id of ["target", "engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "audioFormat", "learn", "display",
+for (const id of ["speech", "target", "engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "audioFormat", "learn", "display",
   "capStyle", "capColor", "finalOnly", "audioSource", "readAloud", "ruFirst", "hoverCard", "newOnly"]) {
   $(id).onchange = async () => {
     let v = $(id).type === "checkbox" ? $(id).checked : $(id).value;
@@ -242,6 +262,7 @@ for (const id of ["target", "engine", "fontSize", "showRu", "hideEn", "saveMode"
     await chrome.storage.sync.set({ [id]: v });
     bg({ type: "settings", settings: { [id]: v } }); // only what changed (the box may have changed others)
     learnHint();
+    if (id === "speech") speechStatus(true);
     refresh();
   };
 }
@@ -254,15 +275,50 @@ $("bgOpacity").oninput = () => {
 };
 $("bgOpacity").onchange = () => chrome.storage.sync.set({ bgOpacity: settings.bgOpacity });
 
-// is the local server running?
-try {
-  const ws = new WebSocket(settings.server + "/ping");
-  ws.onopen = () => { $("srv").textContent = "running"; $("srv").className = "ok"; ws.close(); };
-  ws.onerror = () => {
-    $("srv").className = "bad";
-    $("srv").innerHTML = 'not running · <a id="setupLink">set it up</a>';
-    $("setupLink").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
-  };
-} catch {}
+// ---------- speech engine status (footer + Advanced) ----------
+const setupLink = (text) => {
+  const a = Object.assign(document.createElement("a"), { textContent: text });
+  a.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html#companion") });
+  return a;
+};
+const companionUp = () => new Promise((resolve) => {
+  try {
+    const ws = new WebSocket(settings.server + "/ping");
+    ws.onopen = () => { ws.close(); resolve(true); };
+    ws.onerror = () => resolve(false);
+  } catch { resolve(false); }
+});
+/** On-device Russian (Chrome's own pack): "available" | "downloadable" | "downloading" | "unavailable". */
+const deviceState = () => webkitSpeechRecognition.available({ langs: ["ru-RU"], processLocally: true }).catch(() => "unavailable");
+async function speechStatus(justChosen = false) {
+  const info = $("speechInfo"), srv = $("srv");
+  info.replaceChildren(); srv.replaceChildren(); srv.className = "";
+  if (settings.speech === "companion") {
+    const up = await companionUp();
+    srv.className = up ? "ok" : "bad";
+    srv.append(up ? "companion app running" : "companion app not running · ");
+    if (!up) srv.append(setupLink("install it"));
+    info.append(up ? "Using the companion app (GigaAM)." : "The companion app isn't running. ", up ? "" : setupLink("Install it (Windows, Mac, Linux)"));
+  } else if (settings.speech === "device") {
+    let st = await deviceState();
+    if (justChosen && (st === "downloadable" || st === "downloading")) {
+      info.textContent = "Downloading the Russian speech pack (once)…";
+      // the change event is a click, so Chrome allows the download now
+      const ok = await webkitSpeechRecognition.install({ langs: ["ru-RU"], processLocally: true }).catch(() => false);
+      st = ok ? "available" : await deviceState();
+    }
+    const ready = st === "available";
+    srv.className = ready ? "ok" : "bad";
+    srv.textContent = ready ? "on this computer ✓" : "on-device pack not ready";
+    info.textContent = ready ? "Private: audio stays on this computer."
+      : st === "unavailable" ? "Chrome can't do Russian on this computer. Use “Built into Chrome” or the companion app."
+      : "Choose this option again to download Chrome's Russian pack.";
+  } else {
+    srv.className = "ok";
+    srv.textContent = "built into Chrome ✓";
+    info.textContent = "Works right away. Chrome sends the audio to Google's speech service.";
+  }
+}
+speechStatus();
 
 refresh();

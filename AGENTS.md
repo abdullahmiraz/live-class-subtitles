@@ -5,7 +5,12 @@
 `live-class-subtitles` (install-autostart.sh removes the old `ru-en-subtitles` unit), install dir
 `~/.local/share/live-class-subtitles`.
 
-Live Russian → English (or 37 other languages) subtitles for any Chrome tab. A Chrome MV3 extension captures tab audio and streams it to a **local Python server**. The server transcribes the Russian on the CPU and translates it through free online endpoints.
+Live Russian → English (or 37 other languages) subtitles for any Chrome tab. A Chrome MV3 extension captures tab audio, and **one of three speech engines** turns it into text (popup → Advanced; `settings.speech`):
+- `chrome` (default): Chrome's Web Speech API on the captured track. Nothing to install, any OS.
+- `device`: the same API with `processLocally`, using Chrome's downloadable Russian pack.
+- `companion`: the optional **local Python app** (GigaAM on the CPU), installable on Windows/macOS/Linux.
+
+Translation runs inside the extension (`translate.js`) for the built-in engines, and on the server for the companion.
 
 ## Hard constraints (the owner's requirements, do not violate)
 - **License is PolyForm Strict 1.0.0** (personal, non-commercial use; no redistribution or derivatives without permission). Don't change it, and don't add dependencies whose licenses conflict (GPL code can't be merged in; LGPL can only be bundled unmodified as a separate file, like vendor/lame.min.js).
@@ -28,7 +33,9 @@ store/                       LISTING.md (copy-paste listing + permission justifi
 extension/                   Chrome MV3 extension (no build step, plain JS)
   manifest.json              permissions: tabCapture, offscreen, storage, activeTab, downloads, scripting; optional
                              host permissions (per auto-start site only); NO content_scripts (CI enforces); Alt+Shift+Y
-  welcome.html / .js         setup page opened on first install: install command + live companion status
+  chrome-speech.js           built-in engine: webkitSpeechRecognition.start(track), restarts, partial/final → same "sub" messages
+  translate.js               translators + Yandex alignment + looksEnglish (port of server/translate.py; tested in tests/)
+  welcome.html / .js         opened on first install: "you're ready" + optional companion install steps for the user's OS
   background.js              service worker: capture state, offscreen doc lifecycle, relays subtitles to the tab
   offscreen.js / .html       getUserMedia(tab) → plays audio back (tab is muted by capture) → 16 kHz AudioWorklet → WebSocket
   pcm-worklet.js             mono Int16 100 ms chunks
@@ -55,7 +62,7 @@ server/
                              looks_english() text check, Whisper-tiny (only for sentences spoken in English)
   translate.py               online translators + translate_chain() fallback with cooldown
   lookup.py                  word card: pymorphy3 (dictionary form + grammar, offline) + cached meaning; lemmas()
-  download_models.sh         fetches the 4 models (~350 MB) into server/models/
+  download_models.py         fetches the 4 models (~350 MB) into server/models/ (any OS)
   tests/                     pytest, no models or network needed
   dev/bench.py               FLEURS benchmarks (ASR WER, translation chrF/BLEU)
   dev/test_client.py         streams a 16 kHz wav to the server like the extension does
@@ -87,6 +94,16 @@ uv run --no-project --with websockets python extension/tests/e2e_headless.py som
 Load the extension: `chrome://extensions` → Developer mode → Load unpacked → `extension/`.
 
 ## Gotchas learned the hard way
+- **Built-in engine (chrome-speech.js):**
+  - Chrome ends recognition sessions on its own (silence, network, time limits). `onend` restarts, with backoff if it loops.
+  - `flush()` turns the pending interim text into a final, then `abort()`s, so the copy Chrome would send later is dropped.
+  - Russian from Chrome has no punctuation; we capitalize the first letter.
+  - Errors: `not-allowed`/`service-not-allowed`/`language-not-supported`/`audio-capture` are fatal (shown in the overlay); `network` means offline, and it retries.
+- **Word card without the companion:** meaning only (no pymorphy3); "known words" then match the lower-cased word form.
+- **Companion installers:**
+  - `install.sh` (macOS/Linux) and `install.ps1` (Windows) need nothing beforehand: they install uv, which brings Python 3.12, and fetch the repo archive from codeload (no git).
+  - `server/download_models.py` is the only model downloader (stdlib, any OS).
+  - `install.ps1` can be parse-checked on Linux with a portable `pwsh`.
 - **Target languages:** Auto order is `RANKED` (owner's choice) for English and `RANKED_OTHER` (Google first) for others. Learning-mode alignment is requested only for `ALIGNED` targets; others use the normal chain. Keep `TARGETS`/`ALIGNED` in `translate.py` and `extension/langs.js` identical.
 - In zsh, `$var` is not word-split: use `${=var}` when looping over argument strings in test scripts.
 - **The server loads speech models lazily.** GigaAM loads on the first client (`load_final()`, ~1.5 s) and Whisper on the first English sentence. Both are freed `--unload-after` seconds (default 300) after the last client leaves, followed by `malloc_trim(0)`; without it, glibc keeps ~350 MB. Everything happens on `asr_pool`, so a reload is ordered after an unload.
