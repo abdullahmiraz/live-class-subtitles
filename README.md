@@ -11,6 +11,13 @@ Live English subtitles for any Chrome tab playing Russian speech (online classes
 - **English sentences**: if the speaker switches to English, that sentence is written down as said (Whisper-tiny) instead of being mistranslated. You can hide those sentences with a popup switch. Russian sentences with a few English words are always kept.
 - **Record a class**: keep the **transcript (EN + RU)**, the **audio**, or both, only if you choose it. Modes are **Off** (default), **Manual** (Start recording / Stop & save) and **Auto** (every session). Transcripts come as Markdown, SRT subtitles, plain text or JSON. Audio is the tab's sound as **MP3** (default, plays on any device, ~22 MB/hour) or Opus `.webm` (smallest, ~15 MB/hour). An `.srt` and the audio file from the same session play together in VLC/mpv. Files go to `Downloads/ru-en-subtitles/`.
 - **Learning mode**: each Russian word and its English translation get the **same color**, and hovering a word highlights its pair. It uses Yandex's word alignment, so you learn as you read instead of only translating.
+- **Learning tools (Extra tab)**:
+  - **Word card**: hover any Russian word to see its dictionary form, grammar and meaning, e.g. *дубе → дуб, noun · masculine · prepositional · "oak"*, with **★ Save** and **✓ I know it**.
+  - **Color only new words**: words you marked known are no longer colored.
+  - **Russian first**: the English stays blurred until you hover, or for 6 s.
+  - **Read translation aloud**: free browser voices, with the class audio lowered while it speaks.
+  - **Vocabulary**: export saved words **for Anki**. Saved transcripts end with a **"Words saved this class"** summary.
+- **Microphone source** for in-person classes or apps outside Chrome. **Final sentences only**, **outline captions** in 4 colors, and a **Test** button that checks the server and each translator.
 - **Two display modes**: **Subtitles**, which shows only the English translation over the video like YouTube CC (it follows the video, even inside embedded players; never more than 2 lines, with long sentences shown in readable pieces; fades in silence; can be dragged and double-click resets it), or the **Panel**, which keeps the full history in both languages.
 - **Auto-start on your sites**: sites where you use subtitles are remembered (popup → Sites). Tick ★ auto-start (or add patterns like `*.zoom.us`), and when such a site starts playing sound a small prompt offers **one-key start** (Alt+Shift+Y). Chrome never lets an extension capture a tab without one click or key press, so this is as automatic as Chrome allows.
 - **Comfortable panel**: newest sentence at the bottom (like Meet/Teams captions), with the latest one highlighted and older ones fading. A separate **LIVE** line shows the sentence being spoken. You can scroll back through history, and a "↓ new" button appears if you scrolled up. The box is resizable (min 320 px), has compact/expanded modes, A−/A+ text size and adjustable background opacity, and ✕ shrinks it to a "CC" pill. Motion is gentle and respects "reduce motion".
@@ -27,9 +34,10 @@ Requirements: Linux (tested on Ubuntu with PipeWire), Google Chrome 138+, Python
    ```
 2. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick the `extension/` folder (once; after code updates click the reload ↻ icon).
 3. On the class tab: click the extension icon → **Start on this tab** (or press **Alt+Shift+Y**). Drag the subtitle box anywhere; it follows fullscreen video.
-4. Popup settings in two tabs:
-   - **Basic** (everything used day to day): display mode (subtitles / panel), font size, background opacity, show Russian, hide English sentences, color-match words (learning), auto-start on this site, and **Record this class** (Off / Manual / Auto, transcript + format, audio).
-   - **Advanced**: translator choice, and the full site list (★ auto-start, add patterns like `*.zoom.us`, forget sites).
+4. Popup settings in three tabs:
+   - **Basic** (day to day): display mode, font size, background, caption style + color, show Russian, final sentences only, hide English sentences, color-match words, auto-start on this site, **Record this class**.
+   - **Advanced**: audio source (tab / microphone + one-time setup), translator, **Test server + translators**, site list.
+   - **Extra** (learning): word card on hover, color only new words, Russian first, read aloud, vocabulary (Anki export, clear, known-words reset).
    The popup remembers the last tab you used.
 5. In the box: drag the header to move it, drag the corner to resize, use A−/A+ for text size and ▾ for compact mode. Size and position are remembered per website.
 
@@ -120,13 +128,17 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
 17. **Owner's choices.** Yandex classic is the default translator. Subtitle mode is translation-only, like YouTube CC. The license is PolyForm Strict (personal use only).
 18. **Auto-start + remembered sites (#2).** A headless test confirmed Chrome blocks tab capture until the user invokes the extension ("Extension has not been invoked for the current page"). So listed sites get a one-key prompt when they start playing sound. The popup reads the site from the tab address, so it works on tabs opened before an extension reload. Subtitle mode was debugged with headless screenshots: 2-line limit, long sentences in pieces, live tail, status line, iframe players.
 
+19. **Issues #4 and #5 done.**
+    - Built: word card (pymorphy3, offline and fast, plus a cached meaning), known words by dictionary form, save words, Anki export, class word summary, Russian-first, read aloud with ducking, microphone source, final-only, outline captions, Test button.
+    - Skipped as overkill: stress marks and difficulty tint (large data or models), per-sentence audio replay, side panel, second target language.
+    - The popup now has three tabs: Basic, Advanced, Extra.
+
 ## Roadmap
 Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues?q=label%3Anext-stage)):
 - ~~Save translations (both languages) to a file~~ ✅ done (v1.1)
 - ~~Record the class audio~~ ✅ done (v1.2)
-- Learning-mode ideas: vocabulary list, Anki export, stress marks, Russian-first recall mode…
+- ~~Learning tools (#4) and borrowed ideas (#5)~~ ✅ done (v1.5)
 - ~~Auto-start on listed websites + remember used sites~~ ✅ done (v1.4, one-key start because Chrome requires a gesture)
-- Borrowed ideas: final-only switch, microphone source, read aloud, caption outline, test button (#5)
 
 ## License
 Copyright © 2026 Abdullah Miraz. **Source-available, not open source.** Licensed under the [PolyForm Strict License 1.0.0](LICENSE):

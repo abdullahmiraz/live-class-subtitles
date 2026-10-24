@@ -1,7 +1,7 @@
 // Offscreen document: captures the tab, keeps it audible, streams 16 kHz PCM to the local server,
 // and (optional) records the tab audio (MP3 or WebM) while a class is being recorded.
 import { addWebmDuration } from "./webm-duration.js";
-let media, playCtx, capCtx, ws, settings, tabId, reconnectTimer, wsOpenedAt = 0, stopped = true;
+let media, playCtx, playGain, capCtx, ws, settings, tabId, reconnectTimer, wsOpenedAt = 0, stopped = true;
 let recorder = null, recChunks = [], recWanted = false, recStartedAt = 0, recFormat = "mp3";
 let mp3 = null; // { ctx, node, enc } while recording MP3
 let recStarting = false; // guards the async MP3 setup against a second start (race → doubled audio)
@@ -24,7 +24,7 @@ function connect() {
     if (d.type === "partial") send({ type: "sub", kind: "partial", ru: d.ru, en: d.en, align: d.align });
     else if (d.type === "final")
       send({
-        type: "sub", kind: "final", ru: d.ru, en: d.en, lang: d.lang, engine: d.engine, align: d.align,
+        type: "sub", kind: "final", ru: d.ru, en: d.en, lang: d.lang, engine: d.engine, align: d.align, words: d.words,
         start: sock.openedAt + d.start * 1000, end: sock.openedAt + d.end * 1000,
       });
     else if (d.type === "done" && flushWaiter) flushWaiter();
@@ -49,13 +49,21 @@ function flush() {
 
 async function start(streamId) {
   stopped = false;
-  media = await navigator.mediaDevices.getUserMedia({
-    audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } },
-    video: false,
-  });
-  // 1) capturing mutes the tab, so play it back to the speakers
-  playCtx = new AudioContext();
-  playCtx.createMediaStreamSource(media).connect(playCtx.destination);
+  if (settings.audioSource === "mic") {
+    // in-person class / desktop app: listen to a microphone instead of the tab (not played back: no echo)
+    media = await navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: settings.micId ? { exact: settings.micId } : undefined, echoCancellation: true, noiseSuppression: true },
+    });
+  } else {
+    media = await navigator.mediaDevices.getUserMedia({
+      audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } },
+      video: false,
+    });
+    // 1) capturing mutes the tab, so play it back to the speakers (through a gain node for "duck while reading aloud")
+    playCtx = new AudioContext();
+    playGain = playCtx.createGain();
+    playCtx.createMediaStreamSource(media).connect(playGain).connect(playCtx.destination);
+  }
   // 2) separate 16 kHz context for recognition (Chrome does the resampling)
   capCtx = new AudioContext({ sampleRate: 16000 });
   await capCtx.audioWorklet.addModule("pcm-worklet.js");
@@ -143,7 +151,7 @@ function stop() {
   media && media.getTracks().forEach((t) => t.stop());
   playCtx && playCtx.close();
   capCtx && capCtx.close();
-  media = playCtx = capCtx = ws = null;
+  media = playCtx = playGain = capCtx = ws = null;
 }
 
 // Every message gets a reply, even on errors, so the background never waits forever.
@@ -164,6 +172,9 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
       case "make-blob": // big transcripts: a blob: URL works where a data: URL would hit Chrome's URL size limit
         return done({ url: URL.createObjectURL(new Blob([msg.text], { type: msg.mime + ";charset=utf-8" })) });
       case "rec-free": URL.revokeObjectURL(msg.url); break;
+      case "duck": // read-aloud is speaking: lower the class audio a little, then restore it smoothly
+        if (playGain) playGain.gain.setTargetAtTime(msg.on ? 0.35 : 1, playCtx.currentTime, 0.15);
+        break;
       case "settings": {
         const changed = (k) => k in msg.settings && msg.settings[k] !== settings[k];
         const reconnect = settings && (changed("engine") || changed("hideEn") || changed("learn"));

@@ -22,13 +22,16 @@ extension/                   Chrome MV3 extension (no build step, plain JS)
   content.js                 two display modes: "subtitles" = English-only YouTube-style caption over the largest
                              <video> (owner wants translation only there); "panel" = shadow-DOM box: history (newest at bottom, scrollback, "↓ new"), LIVE line,
                              resize grip, compact mode, A−/A+, bg opacity, "CC" pill, learning-mode word colors
+  mic.html / mic.js          one-time microphone permission + device picker (offscreen docs can't prompt)
   sites.js                   pure site memory + auto-start rules (exact host or *.wildcard); tested by extension/tests
   transcript.js              pure transcript formatters (md/srt/txt/json) + data: URL; tested by extension/tests
   webm-duration.js           inserts the Duration Chrome's MediaRecorder leaves out of WebM; tested by extension/tests
   popup.html / popup.js      start/stop + settings in two tabs. Basic = everything used day to day (owner wants it full):
-                             display, fontSize, bgOpacity, showRu, hideEn, learn, auto-start-here, Record this class.
-                             Advanced = rarely changed (translator, site list manager). New features start in Advanced and
-                             move to Basic once they're everyday. Settings (chrome.storage.sync): engine, fontSize, bgOpacity, showRu, hideEn,
+                             display, fontSize, bgOpacity, capStyle/capColor, showRu, finalOnly, hideEn, learn,
+                             auto-start-here, Record this class. Advanced = setup (audioSource/micId, translator, Test, site
+                             list). Extra = learning (hoverCard, newOnly, ruFirst, readAloud, vocabulary export/clear).
+                             chrome.storage.local holds vocab [{lemma, word, meaning, grammar, sentence, sentenceEn, ts, site}]
+                             and known [lemmas]. Settings (chrome.storage.sync): engine, fontSize, bgOpacity, showRu, hideEn,
                              learn, display (panel|subtitles), saveMode (off|manual|auto), saveFormat (md|srt|txt|json),
                              saveTranscript, saveAudio, audioFormat (mp3|webm)
 server/
@@ -36,7 +39,8 @@ server/
                              (writes nothing to disk unless started with --save-transcripts)
   engine.py                  Silero VAD, GigaAM-v3 (final RU text), streaming Zipformer (live partial text),
                              looks_english() text check, Whisper-tiny (only for sentences spoken in English)
-  translate.py               online translators + translate_chain() fallback with 60 s cooldown
+  translate.py               online translators + translate_chain() fallback with cooldown
+  lookup.py                  word card: pymorphy3 (dictionary form + grammar, offline) + cached meaning; lemmas()
   download_models.sh         fetches the 4 models (~350 MB) into server/models/
   tests/                     pytest, no models or network needed
   dev/bench.py               FLEURS benchmarks (ASR WER, translation chrF/BLEU)
@@ -47,6 +51,8 @@ docs/research.md             initial market/tech research
 ## Protocol (server → client JSON)
 - `{"type":"ready"}`
 - `{"type":"partial","ru":"…","en":"…","align":[…]}`: live text while the speaker talks (rough; align only in learning mode)
+- learning mode finals also carry `"words": [[ruStart, ruLen, lemma], …]` (for "color only new words")
+- one-shot JSON endpoints (open a socket, read one message): `/lookup?w=<word>` → {word, lemma, pos, grammar, meaning}; `/selftest` → {server, speech, translators: {name: {ok, ms}}}
 - `{"type":"done"}`: reply to the client's text frame `"flush"` once the sentence in progress and all queued finals were sent. The extension flushes before saving, so the last sentence isn't lost.
 - `{"type":"final","ru":"…","en":"…","lang":"ru|en","start":s,"end":s,"engine":"google|yandex|yandex-nmt|whisper","align":[[ruStart,ruLen,enStart,enLen],…]}`
   (`start`/`end` = seconds of audio since the socket opened; offscreen.js converts them to epoch ms. `align` is only filled in learning mode.)

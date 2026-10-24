@@ -49,7 +49,14 @@ export function toMarkdown(t) {
     "",
   ];
   const body = t.entries.map((e) => `**[${clock(e.start - t.startedAt)}]** ${e.en}  \n<sub>${ruLine(e)}</sub>\n`);
-  return head.concat(body).join("\n");
+  return head.concat(body, wordsSection(t)).join("\n");
+}
+
+/** End-of-class summary: words saved with the hover card during this class. */
+function wordsSection(t) {
+  if (!t.words || !t.words.length) return [];
+  return ["", `## Words saved this class (${t.words.length})`, "",
+    ...t.words.map((w) => `- **${w.lemma}** — ${w.meaning}${w.grammar ? ` _(${w.grammar})_` : ""}${w.sentence ? `  \n  <sub>${w.sentence}</sub>` : ""}`)];
 }
 
 export function toSrt(t) {
@@ -65,6 +72,7 @@ export function toSrt(t) {
 export function toText(t) {
   const lines = [`Transcript: ${t.title || t.site} (${new Date(t.startedAt).toLocaleString()})`, ""];
   for (const e of t.entries) lines.push(`[${clock(e.start - t.startedAt)}] ${e.en}`, `           ${ruLine(e)}`, "");
+  if (t.words && t.words.length) lines.push("Words saved this class:", ...t.words.map((w) => `  ${w.lemma} — ${w.meaning}`), "");
   return lines.join("\n");
 }
 
@@ -85,10 +93,18 @@ export function toJson(t) {
         en: e.en,
         engine: e.engine,
       })),
+      words: (t.words || []).map((w) => ({ lemma: w.lemma, word: w.word, meaning: w.meaning, grammar: w.grammar, sentence: w.sentence })),
     },
     null,
     2,
   );
+}
+
+/** Anki import file (tab-separated, with Anki's header lines) from the saved vocabulary. */
+export function toAnki(vocab) {
+  const clean = (x) => String(x || "").replace(/[\t\n\r]+/g, " ").trim();
+  const rows = vocab.map((w) => [w.lemma, w.meaning, w.grammar, w.sentence, w.sentenceEn, new Date(w.ts).toISOString().slice(0, 10)].map(clean).join("\t"));
+  return ["#separator:tab", "#html:false", "#columns:Russian\tEnglish\tGrammar\tExample\tExample (EN)\tDate", ...rows].join("\n") + "\n";
 }
 
 export function render(t, format) {

@@ -13,8 +13,31 @@ const DEFAULTS = {
   learn: false, // learning mode: color-match Russian words with their translation
   bgOpacity: 0.88, // subtitle box background
   display: "panel", // panel (history box) | subtitles (YouTube-style captions over the video)
+  finalOnly: false, // hide the rough live line, show finished sentences only
+  capStyle: "band", // subtitles: band (dark background) | outline (text outline, see-through)
+  capColor: "#ffffff", // subtitles text color
+  audioSource: "tab", // tab | mic (in-person class / desktop apps)
+  micId: "", // chosen microphone (deviceId), "" = default
+  readAloud: false, // speak each finished English sentence (free browser voices), class audio ducked
+  ruFirst: false, // learning: English blurred until you hover (try to understand the Russian first)
+  hoverCard: true, // learning: hover a Russian word -> dictionary form, grammar, meaning, save
+  newOnly: false, // learning: color-match only words you haven't marked "I know it"
 };
 const getSettings = async () => ({ ...DEFAULTS, ...(await chrome.storage.sync.get(Object.keys(DEFAULTS))) });
+
+/** One-shot JSON request to the local server (word lookup, self-test). The service worker isn't bound by page CSPs. */
+async function serverRequest(path, params = {}, ms = 8000) {
+  const { server } = await getSettings();
+  return new Promise((resolve) => {
+    let done = false;
+    const end = (v) => { if (!done) { done = true; clearTimeout(t); try { ws.close(); } catch {} resolve(v); } };
+    const ws = new WebSocket(`${server}/${path}?${new URLSearchParams(params)}`);
+    const t = setTimeout(() => end({ error: "timeout" }), ms);
+    ws.onmessage = (e) => { try { end(JSON.parse(e.data)); } catch { end({ error: "bad reply" }); } };
+    ws.onerror = () => end({ error: "server offline" });
+    ws.onclose = () => end({ error: "server offline" });
+  });
+}
 
 /** Message the offscreen document; never waits longer than `ms` (resolves to `fallback`). */
 function toOffscreen(msg, ms = 10000, fallback = null) {
@@ -113,6 +136,8 @@ const finishSaving = () => serial(async () => {
   }
 
   if (rec.wantTranscript && rec.entries.length) {
+    const { vocab } = await chrome.storage.local.get("vocab");
+    rec.words = (vocab || []).filter((v) => v.ts >= rec.startedAt);
     const { saveFormat } = await getSettings();
     const format = FORMATS[saveFormat] ? saveFormat : "md";
     const filename = fileName(rec, format);
@@ -194,7 +219,8 @@ async function ensureOffscreen() {
 
 async function start(tabId, streamId) {
   // get the stream first: if this tab can't be captured (chrome:// pages…), the running session stays untouched
-  if (!streamId) streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+  const { audioSource } = await getSettings();
+  if (audioSource !== "mic" && !streamId) streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   const cur = await state();
   if (cur) await stop();
   const settings = await getSettings();
@@ -266,6 +292,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         break;
       }
       case "ended": await stop(); break;
+      case "lookup": return reply(await serverRequest("lookup", { w: msg.word }));
+      case "duck": toOffscreen({ type: "duck", on: !!msg.on }, 1000); break;
       case "sites-get": return reply({ sites: sortedSites(await getSites()), shortcut: await shortcutText() });
       case "site-auto": await saveSites(setAuto(await getSites(), msg.pattern, msg.auto)); break;
       case "site-forget": await saveSites(forget(await getSites(), msg.pattern)); break;

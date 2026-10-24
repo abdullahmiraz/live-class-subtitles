@@ -23,7 +23,12 @@
 
   const MIN_W = 320, MIN_H = 120, MAX_HISTORY = 300;
   let host, root, box, histEl, liveEn, liveRu, liveWrap, statusEl, newBtn;
-  let settings = { showRu: true, fontSize: 22, bgOpacity: 0.88, display: "panel" };
+  let settings = { showRu: true, fontSize: 22, bgOpacity: 0.88, display: "panel", finalOnly: false, capStyle: "band",
+    capColor: "#ffffff", ruFirst: false, hoverCard: true, newOnly: false, readAloud: false, learn: false };
+  // words marked "I know it" (dictionary forms), kept in chrome.storage.local and shared by all tabs
+  let known = new Set();
+  chrome.storage.local.get("known").then((r) => (known = new Set(r.known || [])));
+  chrome.storage.onChanged.addListener((ch, area) => { if (area === "local" && ch.known) known = new Set(ch.known.newValue || []); });
   let ui = { compact: false, w: null, h: null, left: null, top: null }; // per-site, chrome.storage.local
   let live = false, saving = null, savedTimer, hideTimer, unseen = 0, stick = true, startedAt = null;
   const KEY = "ui:" + location.host;
@@ -89,6 +94,11 @@
     .box.compact .item { grid-template-columns: 1fr; border-bottom: 0; }
     .box.compact .grip { display: none; }
     .hide-ru .ru { display: none; }
+    .rw { cursor: help; border-radius: 3px; }
+    .rw:hover { background: rgba(255,255,255,.14); }
+    .ruf .item .en, .ruf .live .en { filter: blur(6px); transition: filter .35s ease; }
+    .ruf .item:hover .en, .ruf .item.reveal .en, .ruf .live:hover .en { filter: none; }
+    .ruf .ru { font-size: .8em; color: #e6e9ef; }
   `;
 
   function build() {
@@ -128,6 +138,8 @@
       if (w) w.closest(".item").querySelectorAll(`.w[data-k="${w.dataset.k}"]`).forEach((x) => x.classList.add("hl"));
     });
     histEl.addEventListener("mouseleave", () => histEl.querySelectorAll(".w.hl").forEach((x) => x.classList.remove("hl")));
+    attachHover(histEl);
+    attachHover(liveWrap);
 
     root.querySelectorAll(".btn").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); action(b.dataset.a); }));
     newBtn.onclick = () => { stick = true; scrollToEnd(); };
@@ -280,7 +292,8 @@
     const a = Math.max(0.15, Math.min(1, settings.bgOpacity ?? 0.88));
     box.style.setProperty("--bg-a", a);
     box.style.setProperty("--blur", a >= 0.75 ? "blur(6px)" : "none"); // see-through means really see-through
-    box.classList.toggle("hide-ru", !settings.showRu);
+    box.classList.toggle("hide-ru", !settings.showRu && !settings.ruFirst);
+    box.classList.toggle("ruf", !!settings.ruFirst);
     if (stick) scrollToEnd(true);
   }
 
@@ -320,6 +333,8 @@
     if (m.lang === "en") { it.querySelector(".en").textContent = m.en; ru.textContent = "spoken in English"; ru.classList.add("said-en"); }
     else colorize(it.querySelector(".en"), ru, m);
     histEl.appendChild(it);
+    if (settings.ruFirst) setTimeout(() => it.classList.add("reveal"), 6000); // Russian-first: English shows after 6 s
+    if (m.lang !== "en") speak(m.en);
     lastFinal = m; liveCue = null; playFinal(m);
     while (histEl.children.length > MAX_HISTORY) histEl.firstElementChild.remove();
     setLive("", "");
@@ -345,6 +360,12 @@
     .stat.bad { color: #ffb0b0; }
     .cue.now .txt { font-weight: 500; }
     .ru { font-size: .66em; color: #e8e2c0; }
+    .cap .txt .en { color: var(--cap-color, #fff); }
+    .cap.outline .cue span.txt { background: transparent;
+      text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000, -1px -1px 2px #000, 0 2px 4px rgba(0,0,0,.8); }
+    .cap.ruf .en { filter: blur(6px); transition: filter .35s; }
+    .cap.ruf:hover .en, .cap.ruf.reveal .en { filter: none; }
+    .rw { cursor: help; }
     .w { color: var(--c); }
     .ru .w { text-decoration: underline 1px; text-underline-offset: 3px; }
     .bar { position: absolute; left: 50%; transform: translateX(-50%); top: 0; display: flex; gap: 2px; padding: 2px 4px;
@@ -371,6 +392,7 @@
         <button class="btn" data-a="hide" title="Hide">✕</button>
       </div><div class="cap gone"></div><div class="statrow" style="display:flex;justify-content:center"></div></div>`;
     capEl = capRoot.querySelector(".cap");
+    attachHover(capEl);
     capRoot.querySelectorAll(".btn").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); action(b.dataset.a); }));
     // drag to move (offset from the automatic spot), double-click to reset
     let sx, sy, ox, oy;
@@ -421,8 +443,7 @@
     d.innerHTML = `<span class="txt"><span class="en"></span>${showRu ? `<br><span class="ru"></span>` : ""}</span>`;
     const en = d.querySelector(".en"), ru = d.querySelector(".ru") || document.createElement("span");
     if (c.lang === "en") { en.textContent = c.en; ru.textContent = "(spoken in English)"; }
-    else if (c.align && c.align.length && c.ru) colorize(en, ru, c); // learning mode: colored English words
-    else { en.textContent = c.en; ru.textContent = c.ru || ""; }
+    else colorize(en, ru, c); // learning mode: colored words; Russian words are hoverable
     return d;
   }
 
@@ -491,7 +512,17 @@
     // translation only: a finished sentence is played piece by piece; otherwise the live sentence
     const live = liveCue && liveCue.en && liveCue.en !== "…" ? liveTail(liveCue) : null;
     const cur = finalTimer ? shownFinal : live || shownFinal;
-    const cues = cur ? [cueEl(cur, "now", false)] : [];
+    capEl.classList.toggle("outline", settings.capStyle === "outline");
+    capEl.style.setProperty("--cap-color", settings.capColor || "#fff");
+    capEl.classList.toggle("ruf", !!settings.ruFirst);
+    if (settings.ruFirst && cur && cur !== capEl._last) { // reveal the English 6 s after a new sentence appears
+      capEl.classList.remove("reveal");
+      clearTimeout(capEl._rv);
+      capEl._rv = setTimeout(() => capEl.classList.add("reveal"), 6000);
+    }
+    capEl._last = cur;
+    // translation only, except in Russian-first mode (learning): then the Russian is shown, English blurred
+    const cues = cur ? [cueEl(cur, "now", !!settings.ruFirst)] : [];
     capEl.replaceChildren(...cues);
     capEl.classList.toggle("gone", !cues.length);
     renderCapStatus();
@@ -519,23 +550,34 @@
   const PALETTE = ["#ffd166", "#7bdff2", "#f4978e", "#b8f2a6", "#cdb4db", "#ffb4a2", "#90caf9", "#f6bd60", "#a0e7c3", "#f7a8d8"];
   const STOP_EN = new Set(["the", "a", "an", "is", "are", "was", "were", "be", "of", "to", "in", "on", "at", "it", "and", "or", "there", "that", "this", "by", "for", "with", "as"]);
 
-  /** m.align = [[ruStart, ruLen, enStart, enLen], ...] (character offsets from Yandex). */
-  function colorize(enEl, ruEl, m) {
-    const pairs = [];
-    const takenRu = [], takenEn = [];
+  /** Matching pairs from m.align = [[ruStart, ruLen, enStart, enLen], ...] (character offsets from Yandex). */
+  function pairsOf(m) {
+    if (!m.align || !m.align.length || !m.ru || !m.en) return [];
+    const pairs = [], takenRu = [], takenEn = [];
     const free = (taken, a, b) => taken.every(([x, y]) => b <= x || a >= y);
-    for (const [rs, rl, es, el] of m.align || []) {
+    for (const [rs, rl, es, el] of m.align) {
       if (rl >= m.ru.length * 0.6 || el >= m.en.length * 0.6) continue; // whole-sentence span
       const ruW = m.ru.substr(rs, rl), enW = m.en.substr(es, el);
       if (ruW.trim().length <= 2 && rl <= 2) continue; // tiny function words (в, на, и…)
       if (STOP_EN.has(enW.trim().toLowerCase())) continue;
+      if (settings.newOnly && m.words) { // "color only new words": skip if every word in it is known
+        const inside = m.words.filter(([s, n]) => s < rs + rl && s + n > rs);
+        if (inside.length && inside.every(([, , lem]) => known.has(lem))) continue;
+      }
       if (!free(takenRu, rs, rs + rl) || !free(takenEn, es, es + el)) continue;
       takenRu.push([rs, rs + rl]); takenEn.push([es, es + el]);
       pairs.push({ rs, rl, es, el, k: pairs.length });
     }
-    paint(ruEl, m.ru, pairs.map((p) => [p.rs, p.rl, p.k]));
-    paint(enEl, m.en, pairs.map((p) => [p.es, p.el, p.k]));
+    return pairs;
   }
+
+  /** Render one sentence: English with matching colors, Russian as hoverable words (.rw) with the same colors. */
+  function colorize(enEl, ruEl, m) {
+    const pairs = pairsOf(m);
+    paint(enEl, m.en || "", pairs.map((p) => [p.es, p.el, p.k]));
+    paintRu(ruEl, m.ru || "", pairs, m);
+  }
+  function plain(enEl, ruEl, m) { enEl.textContent = m.en || ""; paintRu(ruEl, m.ru || "", [], m); }
 
   function paint(el, text, ranges) {
     el.textContent = "";
@@ -554,15 +596,148 @@
     if (i < text.length) el.append(text.slice(i));
   }
 
+  const RU_WORD = /[А-Яа-яЁё]+(?:-[А-Яа-яЁё]+)*/g;
+  function paintRu(el, text, pairs, m) {
+    el.textContent = "";
+    el._m = m; // the sentence, for the hover card's "save word" example
+    let i = 0;
+    for (const w of text.matchAll(RU_WORD)) {
+      const s = w.index, n = w[0].length;
+      if (s > i) el.append(text.slice(i, s));
+      const span = document.createElement("span");
+      span.className = "rw";
+      span.textContent = w[0];
+      const p = pairs.find((q) => s < q.rs + q.rl && s + n > q.rs);
+      if (p) { span.classList.add("w"); span.dataset.k = p.k; span.style.setProperty("--c", PALETTE[p.k % PALETTE.length]); }
+      el.append(span);
+      i = s + n;
+    }
+    if (i < text.length) el.append(text.slice(i));
+  }
+
   function setLive(en, ru, align) {
+    if (settings.finalOnly) { // "final sentences only": no rough live text, just a quiet "speaking…" hint
+      liveCue = null;
+      renderCaptions();
+      liveWrap.classList.toggle("idle", !ru);
+      liveEn.textContent = ru ? "speaking…" : "listening…";
+      liveRu.textContent = "";
+      return;
+    }
     liveCue = en || ru ? { en: en || "…", ru, align } : null;
     renderCaptions();
     liveWrap.classList.toggle("idle", !en && !ru);
-    if (en && ru && align && align.length) colorize(liveEn, liveRu, { en, ru, align });
+    if (en) colorize(liveEn, liveRu, { en, ru, align });
     else {
-      liveEn.textContent = en || (ru ? "…" : "listening…");
-      liveRu.textContent = ru || "";
+      liveEn.textContent = ru ? "…" : "listening…";
+      paintRu(liveRu, ru || "", [], { ru });
     }
+  }
+
+  // ---------- hover card: dictionary form, grammar, meaning; save word / "I know it" ----------
+  let cardHost, cardTimer, cardHide, cardWord = null;
+  const lookups = new Map(); // word -> promise of {lemma, grammar, meaning}
+  const CARD_CSS = `
+    :host { all: initial; }
+    .card { font: 13px/1.4 system-ui, "Segoe UI", Roboto, sans-serif; color: #fff; background: rgba(18,20,26,.97);
+      border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 9px 11px; min-width: 190px; max-width: 280px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.5); animation: in .15s ease-out; }
+    @keyframes in { from { opacity: 0; transform: translateY(4px); } }
+    .lemma { font-size: 17px; font-weight: 700; }
+    .form { color: #9aa3b5; font-size: 12px; margin-left: 6px; }
+    .gram { color: #b8c4ff; font-size: 12px; margin: 2px 0 4px; }
+    .mean { font-size: 14px; }
+    .row { display: flex; gap: 6px; margin-top: 8px; }
+    button { all: unset; cursor: pointer; font-size: 12px; padding: 3px 9px; border-radius: 6px; background: #2b3140; color: #dde3ee; }
+    button:hover { background: #3a4256; color: #fff; }
+    button.done { background: #1f5130; color: #c9f5d6; }
+    .dim { color: #8a93a6; }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }`;
+
+  function attachHover(container) {
+    container.addEventListener("mouseover", (e) => {
+      const w = e.target.closest && e.target.closest(".rw");
+      if (!w || !settings.hoverCard) return;
+      clearTimeout(cardTimer); clearTimeout(cardHide);
+      cardTimer = setTimeout(() => showCard(w), 300);
+    });
+    container.addEventListener("mouseout", (e) => {
+      if (e.target.closest && e.target.closest(".rw")) { clearTimeout(cardTimer); cardHide = setTimeout(hideCard, 400); }
+    });
+  }
+
+  function hideCard() {
+    if (cardHost) { cardHost.remove(); cardHost = null; cardWord = null; }
+  }
+
+  function showCard(wEl) {
+    const word = wEl.textContent.toLowerCase();
+    const m = (wEl.closest(".ru") || wEl.parentElement)._m || {};
+    hideCard();
+    cardWord = word;
+    cardHost = document.createElement("div");
+    cardHost.style.cssText = "all:initial;position:fixed;z-index:2147483647;";
+    const r = cardHost.attachShadow({ mode: "open" });
+    r.innerHTML = `<style>${CARD_CSS}</style><div class="card"><div><span class="lemma">${"…"}</span><span class="form"></span></div>
+      <div class="gram dim">looking up…</div><div class="mean"></div>
+      <div class="row"><button class="save">★ Save</button><button class="know">✓ I know it</button></div></div>`;
+    cardHost.addEventListener("mouseenter", () => clearTimeout(cardHide));
+    cardHost.addEventListener("mouseleave", () => (cardHide = setTimeout(hideCard, 250)));
+    (document.fullscreenElement && !/^(VIDEO|IFRAME)$/.test(document.fullscreenElement.tagName) ? document.fullscreenElement : document.documentElement).appendChild(cardHost);
+    const rect = wEl.getBoundingClientRect();
+    const place = () => {
+      const c = cardHost && cardHost.getBoundingClientRect();
+      if (!c) return;
+      const above = rect.top - c.height - 8;
+      cardHost.style.left = Math.max(4, Math.min(rect.left, innerWidth - c.width - 4)) + "px";
+      cardHost.style.top = (above > 4 ? above : rect.bottom + 8) + "px";
+    };
+    place();
+    if (!lookups.has(word)) lookups.set(word, chrome.runtime.sendMessage({ target: "background", type: "lookup", word }).catch(() => ({ error: "offline" })));
+    lookups.get(word).then((info) => {
+      if (!cardHost || cardWord !== word) return;
+      if (!info || info.error) { lookups.delete(word); r.querySelector(".gram").textContent = "lookup needs the local server"; return; }
+      r.querySelector(".lemma").textContent = info.lemma || word;
+      r.querySelector(".form").textContent = info.lemma && info.lemma !== word ? `(${word})` : "";
+      r.querySelector(".gram").textContent = info.grammar || "";
+      r.querySelector(".gram").classList.remove("dim");
+      r.querySelector(".mean").textContent = info.meaning || "";
+      const save = r.querySelector(".save"), know = r.querySelector(".know");
+      chrome.storage.local.get("vocab").then(({ vocab }) => {
+        if ((vocab || []).some((v) => v.lemma === info.lemma)) { save.textContent = "★ Saved"; save.classList.add("done"); }
+      });
+      if (known.has(info.lemma)) { know.textContent = "✓ Known"; know.classList.add("done"); }
+      save.onclick = async () => {
+        const { vocab = [] } = await chrome.storage.local.get("vocab");
+        const entry = { lemma: info.lemma, word, meaning: info.meaning, grammar: info.grammar, sentence: m.ru || "",
+          sentenceEn: m.en || "", ts: Date.now(), site: location.hostname };
+        await chrome.storage.local.set({ vocab: [...vocab.filter((v) => v.lemma !== info.lemma), entry] });
+        save.textContent = "★ Saved"; save.classList.add("done");
+      };
+      know.onclick = async () => {
+        const { known: k = [] } = await chrome.storage.local.get("known");
+        const on = !k.includes(info.lemma);
+        await chrome.storage.local.set({ known: on ? [...k, info.lemma] : k.filter((x) => x !== info.lemma) });
+        know.textContent = on ? "✓ Known" : "✓ I know it"; know.classList.toggle("done", on);
+      };
+      place();
+    });
+  }
+
+  // ---------- read aloud (free browser voices) ----------
+  function speak(text) {
+    if (!settings.readAloud || !text || !window.speechSynthesis) return;
+    const synth = window.speechSynthesis;
+    if (synth.speaking && synth.pending) synth.cancel(); // falling behind the class: skip to the newest sentence
+    const u = new SpeechSynthesisUtterance(text);
+    const voice = synth.getVoices().find((v) => /^en(-|_)?(US|GB)?/i.test(v.lang));
+    if (voice) u.voice = voice;
+    u.lang = "en-US";
+    u.rate = 1.05;
+    const duck = (on) => chrome.runtime.sendMessage({ target: "background", type: "duck", on }).catch(() => {});
+    u.onstart = () => duck(true);
+    u.onend = u.onerror = () => { if (!synth.pending) duck(false); };
+    synth.speak(u);
   }
 
   // ---------- auto-start prompt (Chrome needs one click/key to allow capturing a tab) ----------
@@ -629,6 +804,7 @@
         setTimeout(() => h && h.remove(), 250);
         host = statusEl = histEl = null;
         if (capHost) { capHost.remove(); capHost = null; clearInterval(capTimer); }
+        hideCard();
         lastFinal = liveCue = shownFinal = null; finalQueue = []; clearTimeout(finalTimer); finalTimer = null;
         live = false; saving = null; startedAt = null; stick = true; unseen = 0; ui.hidden = false;
       };

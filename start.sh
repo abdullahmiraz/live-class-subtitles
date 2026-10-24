@@ -27,13 +27,15 @@ fi
 
 if [ ! -x .venv/bin/python ]; then
   echo "Creating Python environment..."
-  if command -v uv >/dev/null; then
-    uv venv -q .venv --python 3.12
-    uv pip install -q --python .venv/bin/python -r requirements.txt
-  else
-    python3 -m venv .venv
-    .venv/bin/pip install -q -r requirements.txt
-  fi
+  if command -v uv >/dev/null; then uv venv -q .venv --python 3.12; else python3 -m venv .venv; fi
+fi
+# (re)install dependencies when requirements.txt changed (e.g. after an update added a package)
+REQ_HASH="$(sha256sum requirements.txt | cut -d' ' -f1)"
+if [ "$(cat .venv/.requirements.sha256 2>/dev/null)" != "$REQ_HASH" ]; then
+  echo "Installing Python packages..."
+  if command -v uv >/dev/null; then uv pip install -q --python .venv/bin/python -r requirements.txt
+  else .venv/bin/pip install -q -r requirements.txt; fi
+  echo "$REQ_HASH" > .venv/.requirements.sha256
 fi
 
 ./download_models.sh

@@ -1,6 +1,9 @@
+import { toAnki } from "./transcript.js";
 const DEFAULTS = {
   server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
   saveMode: "off", saveFormat: "md", saveTranscript: true, saveAudio: false, audioFormat: "mp3", learn: false, bgOpacity: 0.88, display: "panel",
+  finalOnly: false, capStyle: "band", capColor: "#ffffff", audioSource: "tab", micId: "",
+  readAloud: false, ruFirst: false, hoverCard: true, newOnly: false,
 };
 const $ = (id) => document.getElementById(id);
 const bg = (m) => chrome.runtime.sendMessage({ target: "background", ...m });
@@ -30,6 +33,8 @@ $("saveAudio").checked = settings.saveAudio;
 $("audioFormat").value = settings.audioFormat;
 $("learn").checked = settings.learn;
 $("display").value = settings.display;
+for (const id of ["capStyle", "capColor", "audioSource"]) $(id).value = settings[id];
+for (const id of ["finalOnly", "readAloud", "ruFirst", "hoverCard", "newOnly"]) $(id).checked = !!settings[id];
 $("bgOpacity").value = Math.round(settings.bgOpacity * 100);
 $("bgOpacityVal").textContent = $("bgOpacity").value + "%";
 
@@ -119,6 +124,44 @@ $("addBtn").onclick = async () => {
   $("addPattern").value = "";
   refreshSites();
 };
+// ---------- Advanced: microphone setup, Test ----------
+$("micSetup").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("mic.html") });
+$("testBtn").onclick = () => {
+  $("testOut").textContent = "testing…";
+  const ws = new WebSocket(settings.server + "/selftest");
+  const t = setTimeout(() => { $("testOut").textContent = "✗ local server not answering — run ./start.sh"; ws.close(); }, 15000);
+  ws.onmessage = (e) => {
+    clearTimeout(t);
+    const d = JSON.parse(e.data);
+    const lines = [`✓ local server · speech recognition ${d.speech === "ok" ? "✓" : "✗"}`];
+    for (const [name, r] of Object.entries(d.translators || {}))
+      lines.push(`${r.ok ? "✓" : "✗"} ${name} ${r.ok ? r.ms + " ms" : "— " + (r.error || "failed")}`);
+    $("testOut").textContent = lines.join("\n");
+  };
+  ws.onerror = () => { clearTimeout(t); $("testOut").textContent = "✗ local server not running — start it with ./start.sh"; };
+};
+
+// ---------- Extra: vocabulary ----------
+async function refreshVocab() {
+  const { vocab = [], known = [] } = await chrome.storage.local.get(["vocab", "known"]);
+  $("vocabInfo").textContent = vocab.length
+    ? `${vocab.length} saved word${vocab.length === 1 ? "" : "s"} · newest: ${vocab.slice(-3).map((v) => v.lemma).reverse().join(", ")}`
+    : "No saved words yet: hover a Russian word → ★ Save.";
+  $("ankiBtn").disabled = $("vocabClear").disabled = !vocab.length;
+  $("knownInfo").innerHTML = known.length ? `${known.length} word${known.length === 1 ? "" : "s"} marked “I know it” · <a id="knownReset">reset</a>` : "";
+  if (known.length) $("knownReset").onclick = async () => { if (confirm("Forget all “I know it” words?")) { await chrome.storage.local.set({ known: [] }); refreshVocab(); } };
+}
+$("ankiBtn").onclick = async () => {
+  const { vocab = [] } = await chrome.storage.local.get("vocab");
+  const url = URL.createObjectURL(new Blob([toAnki(vocab)], { type: "text/plain;charset=utf-8" }));
+  await chrome.downloads.download({ url, filename: `ru-en-subtitles/vocabulary_${new Date().toISOString().slice(0, 10)}.txt`, conflictAction: "uniquify" });
+  $("vocabInfo").textContent += " · exported ✓ (Anki: File → Import)";
+};
+$("vocabClear").onclick = async () => {
+  if (confirm("Delete all saved words?")) { await chrome.storage.local.set({ vocab: [] }); refreshVocab(); }
+};
+refreshVocab();
+
 $("addPattern").onkeydown = (e) => e.key === "Enter" && $("addBtn").click();
 setInterval(refresh, 2000); // live sentence counter while the popup is open
 
@@ -129,7 +172,8 @@ $("toggle").onclick = async () => {
     // must be called from the popup (user gesture) to get a stream id for this tab
     let res;
     try {
-      const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      // microphone mode needs no tab capture
+      const streamId = settings.audioSource === "mic" ? null : await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
       res = await bg({ type: "start", tabId: tab.id, streamId });
     } catch (e) {
       res = { error: e.message };
@@ -142,7 +186,8 @@ $("toggle").onclick = async () => {
   refresh();
 };
 
-for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "audioFormat", "learn", "display"]) {
+for (const id of ["engine", "fontSize", "showRu", "hideEn", "saveMode", "saveFormat", "saveTranscript", "saveAudio", "audioFormat", "learn", "display",
+  "capStyle", "capColor", "finalOnly", "audioSource", "readAloud", "ruFirst", "hoverCard", "newOnly"]) {
   $(id).onchange = async () => {
     let v = $(id).type === "checkbox" ? $(id).checked : $(id).value;
     if (id === "fontSize") v = $(id).value = Math.max(12, Math.min(48, Math.round(Number(v)) || 26)); // never 0 / empty

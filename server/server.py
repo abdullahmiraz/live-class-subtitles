@@ -29,7 +29,8 @@ import numpy as np
 import websockets
 
 from engine import SAMPLE_RATE, EnglishASR, FinalASR, PartialASR, looks_english, make_vad
-from translate import translate_chain, yandex_aligned
+from lookup import lemmas, lookup
+from translate import ENGINES, translate_chain, yandex_aligned
 
 VAD_WINDOW = 512  # samples, required by Silero VAD at 16 kHz
 PARTIAL_EVERY = 0.35  # seconds between partial updates
@@ -214,7 +215,9 @@ class Session:
         if not en:
             align = []  # alignment only belongs to the text it came with
             en, used = await loop.run_in_executor(pool, translate_chain, self.chain, ru)
-        await self.send(type="final", ru=ru, en=en, lang="ru", start=round(start, 2), end=round(end, 2), engine=used, align=align)
+        words = lemmas(ru) if self.learn else []  # dictionary forms, so "known words" match every form
+        await self.send(type="final", ru=ru, en=en, lang="ru", start=round(start, 2), end=round(end, 2), engine=used,
+                        align=align, words=words)
         self.write_log(f"**[{stamp}]** {en}  \n<sub>{ru}</sub>\n\n")
         print(f"[{stamp}] ({used}) {ru}\n          → {en}", flush=True)
 
@@ -233,6 +236,19 @@ async def handler(ws):
     url = urllib.parse.urlparse(ws.request.path if ws.request else "/")
     label = (url.path.strip("/") or "tab").replace("/", "_")[:40]
     if label == "ping":  # popup health check
+        await ws.close()
+        return
+    if label in ("lookup", "selftest"):  # one-shot JSON requests (hover card / popup Test button)
+        q = urllib.parse.parse_qs(url.query)
+        loop = asyncio.get_running_loop()
+        try:
+            if label == "lookup":
+                res = await loop.run_in_executor(pool, lookup, q.get("w", [""])[0][:60])
+            else:
+                res = await loop.run_in_executor(pool, selftest)
+            await ws.send(json.dumps(res, ensure_ascii=False))
+        except Exception as e:
+            await ws.send(json.dumps({"error": str(e)}))
         await ws.close()
         return
     q = urllib.parse.parse_qs(url.query)
@@ -254,6 +270,19 @@ async def handler(ws):
     finally:
         await s.close()
         print("client disconnected" + (f", server log: {s.log}" if s.log else ""), flush=True)
+
+
+def selftest():
+    """Popup "Test" button: is everything this server needs working right now?"""
+    out = {"server": "ok", "speech": "ok" if final_asr else "not loaded", "translators": {}}
+    for name, fn in ENGINES.items():
+        t = time.monotonic()
+        try:
+            text = fn("Привет, как дела?")
+            out["translators"][name] = {"ok": bool(text), "ms": int((time.monotonic() - t) * 1000), "sample": text[:40]}
+        except Exception as e:
+            out["translators"][name] = {"ok": False, "ms": int((time.monotonic() - t) * 1000), "error": str(e)[:80]}
+    return out
 
 
 async def main():

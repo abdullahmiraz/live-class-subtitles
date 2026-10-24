@@ -1,3 +1,5 @@
 sherpa-onnx>=2.0
 websockets>=13
 numpy
+pymorphy3
+pymorphy3-dicts-ru

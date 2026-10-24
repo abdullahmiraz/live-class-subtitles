@@ -59,3 +59,18 @@ test("dataUrl round-trips UTF-8", () => {
   const b64 = url.split(",")[1];
   assert.equal(Buffer.from(b64, "base64").toString("utf8"), "Привет, мир — hello");
 });
+
+test("end-of-class word summary + Anki export", async () => {
+  const { toAnki } = await import("../transcript.js");
+  const words = [{ lemma: "дуб", word: "дубе", meaning: "oak", grammar: "noun · masculine · prepositional · singular",
+    sentence: "У лукоморья дуб зелёный.", sentenceEn: "There is a green oak\tnear Lukomorye.", ts: T0 }];
+  const md = render({ ...t, words }, "md");
+  assert.match(md, /## Words saved this class \(1\)/);
+  assert.match(md, /- \*\*дуб\*\* — oak _\(noun · masculine/);
+  assert.match(render({ ...t, words }, "txt"), /Words saved this class:\n  дуб — oak/);
+  assert.equal(JSON.parse(render({ ...t, words }, "json")).words[0].lemma, "дуб");
+  const anki = toAnki(words).split("\n");
+  assert.equal(anki[0], "#separator:tab");
+  assert.equal(anki[3].split("\t").length, 6);           // tabs inside fields are cleaned
+  assert.ok(anki[3].startsWith("дуб\toak\tnoun"));
+});

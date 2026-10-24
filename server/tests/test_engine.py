@@ -42,3 +42,15 @@ def test_looks_english(text, expected):
 ])
 def test_drop_repeats(text, expected):
     assert drop_repeats(text) == expected
+
+
+def test_lookup_offline_grammar():
+    from lookup import analyze, lemmas
+    a = analyze("Дубе,")
+    assert a["lemma"] == "дуб" and "prepositional" in a["grammar"] and a["pos"] == "noun"
+    assert analyze("hello")["pos"] == ""  # not Russian: no analysis
+    text = "У лукоморья дуб зелёный."
+    ws = lemmas(text)
+    assert [w[2] for w in ws] == ["у", "лукоморье", "дуб", "зелёный"]
+    s, n, _ = ws[1]
+    assert text[s:s + n] == "лукоморья"

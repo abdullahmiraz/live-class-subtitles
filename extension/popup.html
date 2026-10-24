@@ -43,7 +43,8 @@
 
 <div class="tabs" role="tablist">
   <button class="tab active" data-tab="basic" role="tab">Basic</button>
-  <button class="tab" data-tab="advanced" role="tab" title="Translator choice, site list">Advanced</button>
+  <button class="tab" data-tab="advanced" role="tab" title="Audio source, translator, test, site list">Advanced</button>
+  <button class="tab" data-tab="extra" role="tab" title="Learning tools, vocabulary, read aloud">Extra</button>
 </div>
 
 <!-- Basic: everything used day to day -->
@@ -56,7 +57,13 @@
   </label>
   <label>Font size <input id="fontSize" type="number" min="12" max="48" /></label>
   <label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
+  <label title="Subtitle mode: a dark band behind the text, or an outline only (see-through)">Caption style
+    <span><select id="capStyle" style="width:72px"><option value="band">Band</option><option value="outline">Outline</option></select>
+    <select id="capColor" style="width:66px" title="Text color">
+      <option value="#ffffff">White</option><option value="#ffe14d">Yellow</option>
+      <option value="#7fe7ff">Cyan</option><option value="#9dff9d">Green</option></select></span></label>
   <label>Show Russian text <input id="showRu" type="checkbox" /></label>
+  <label title="Hide the rough live line; show finished sentences only">Final sentences only <input id="finalOnly" type="checkbox" /></label>
   <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
   <label title="Learning mode: each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex classic (it provides the word matching).">Color-match words (learning) <input id="learn" type="checkbox" /></label>
   <label title="When this site starts playing sound, offer one-key start (Chrome requires a click or the shortcut to capture a tab). Manage all sites in Advanced.">
@@ -70,7 +77,7 @@
         <option value="auto">Auto (every session)</option>
       </select>
     </label>
-    <label title="Both languages, with timestamps"><span><input id="saveTranscript" type="checkbox" /> Transcript</span>
+    <label title="Both languages, with timestamps, plus the words you saved this class"><span><input id="saveTranscript" type="checkbox" /> Transcript</span>
       <select id="saveFormat">
         <option value="md">Markdown (.md)</option>
         <option value="srt">Subtitles (.srt)</option>
@@ -78,7 +85,7 @@
         <option value="json">JSON (.json)</option>
       </select>
     </label>
-    <label title="The tab's audio. With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio</span>
+    <label title="The audio. With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio</span>
       <select id="audioFormat">
         <option value="mp3" title="Plays on any device, ~22 MB per hour">MP3 (any device)</option>
         <option value="webm" title="Smallest files, ~15 MB per hour">WebM (smallest)</option>
@@ -90,8 +97,18 @@
   </fieldset>
 </section>
 
-<!-- Advanced: rarely changed settings + new features until they prove everyday -->
+<!-- Advanced: setup and rarely changed settings -->
 <section class="pane" id="pane-advanced">
+  <fieldset>
+    <legend>Audio source</legend>
+    <label>Listen to
+      <select id="audioSource">
+        <option value="tab" title="Online class: the sound of this tab">This tab</option>
+        <option value="mic" title="In-person class or apps outside Chrome">Microphone</option>
+      </select>
+    </label>
+    <div class="hint" style="margin-top:0">Microphone needs a one-time permission: <a id="micSetup">set up microphone</a></div>
+  </fieldset>
   <fieldset>
     <legend>Translation</legend>
     <label>Translator
@@ -104,10 +121,35 @@
     </label>
   </fieldset>
   <fieldset>
+    <legend>Check</legend>
+    <button id="testBtn" style="background:#5f6368">Test server + translators</button>
+    <div id="testOut" class="hint" style="white-space:pre-line"></div>
+  </fieldset>
+  <fieldset>
     <legend>Sites</legend>
     <div id="siteList"></div>
     <div class="addrow"><input id="addPattern" placeholder="add site, e.g. *.zoom.us" /><button id="addBtn">Add</button></div>
     <div class="hint">★ = auto-start · sites you've used are remembered</div>
+  </fieldset>
+</section>
+
+<!-- Extra: learning tools -->
+<section class="pane" id="pane-extra">
+  <fieldset>
+    <legend>Learn while you listen</legend>
+    <label title="Hover any Russian word: dictionary form, grammar (case, tense…) and meaning, with Save / I know it">Word card on hover <input id="hoverCard" type="checkbox" /></label>
+    <label title="With Color-match words: only words you haven't marked “I know it” get colors">Color only new words <input id="newOnly" type="checkbox" /></label>
+    <label title="Russian shown first; the English stays blurred until you hover (or 6 s later). Try to understand before peeking.">Russian first (English blurred) <input id="ruFirst" type="checkbox" /></label>
+    <label title="Speaks each finished English sentence with your browser's free voices; the class audio is lowered while it speaks">Read translation aloud <input id="readAloud" type="checkbox" /></label>
+  </fieldset>
+  <fieldset>
+    <legend>Vocabulary</legend>
+    <div id="vocabInfo" class="hint" style="margin-top:2px">No saved words yet: hover a Russian word → ★ Save.</div>
+    <div class="addrow" style="margin-top:8px">
+      <button id="ankiBtn" style="background:#188038">Export for Anki</button>
+      <button id="vocabClear" style="background:#5f6368">Clear</button>
+    </div>
+    <div id="knownInfo" class="hint"></div>
   </fieldset>
 </section>
 
