@@ -8,6 +8,16 @@ const bg = (m) => chrome.runtime.sendMessage({ target: "background", ...m });
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 const settings = { ...DEFAULTS, ...(await chrome.storage.sync.get(Object.keys(DEFAULTS))) };
 
+// ---------- Basic / Advanced tabs (last used tab is remembered) ----------
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+  document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.id === "pane-" + name));
+  chrome.storage.local.set({ popupTab: name });
+}
+document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.tab)));
+chrome.storage.local.get("popupTab").then((r) => r.popupTab && showTab(r.popupTab));
+$("shortcuts").onclick = () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+
 $("engine").value = settings.engine;
 if (!$("engine").value) $("engine").value = settings.engine = "auto"; // e.g. removed "argos" option
 $("fontSize").value = settings.fontSize;
@@ -33,6 +43,7 @@ async function refresh() {
 
 async function refreshSave(capturingHere) {
   const s = await bg({ type: "save-status" });
+  $("advDot").classList.toggle("on", !!s.active);
   const btn = $("saveBtn");
   btn.style.display = settings.saveMode === "manual" ? "" : "none";
   const nothing = !settings.saveTranscript && !settings.saveAudio;
@@ -65,7 +76,8 @@ $("openFolder").onclick = () => chrome.downloads.showDefaultFolder();
 // ---------- sites: remembered + auto-start ----------
 let here = { host: "", pattern: "" };
 async function refreshSites() {
-  const { sites } = await bg({ type: "sites-get" });
+  const { sites, shortcut } = await bg({ type: "sites-get" });
+  if (shortcut) $("shortcut").textContent = shortcut;
   const list = $("siteList");
   list.replaceChildren();
   const fmtDate = (t) => (t ? new Date(t).toLocaleDateString() : "never used");

@@ -1,12 +1,12 @@
 <!doctype html>
 <meta charset="utf-8" />
 <style>
-  body { font: 13px system-ui, sans-serif; width: 270px; margin: 12px; color: #222; }
+  body { font: 13px system-ui, sans-serif; width: 290px; margin: 12px; color: #222; }
   h1 { font-size: 14px; margin: 0 0 10px; }
   button { width: 100%; padding: 9px; font-size: 14px; font-weight: 600; border: 0; border-radius: 6px; cursor: pointer; background: #1a73e8; color: #fff; }
   button.on { background: #d33; }
   label { display: flex; justify-content: space-between; align-items: center; margin: 9px 0; gap: 8px; }
-  select, input[type=number] { width: 120px; }
+  select, input[type=number] { width: 130px; }
   .srv { font-size: 12px; margin-top: 10px; color: #666; }
   .ok { color: #188038; } .bad { color: #c5221f; }
   .hint { color: #888; font-size: 11px; margin-top: 8px; }
@@ -26,63 +26,94 @@
   .addrow { display: flex; gap: 6px; }
   .addrow input { flex: 1; font-size: 12px; padding: 3px 5px; }
   .addrow button { width: auto; padding: 3px 10px; font-size: 12px; background: #5f6368; }
+  /* tabs */
+  .tabs { display: flex; margin: 12px 0 2px; border-bottom: 1px solid #ddd; }
+  .tab { all: unset; flex: 1; text-align: center; padding: 7px 0; cursor: pointer; color: #666; font-weight: 600; font-size: 13px;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab:hover { color: #222; }
+  .tab.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+  .tab .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: #d33; margin-left: 5px; vertical-align: middle; }
+  .tab .dot.on { display: inline-block; }
+  .pane { display: none; }
+  .pane.active { display: block; }
+  .pane > fieldset:first-child { margin-top: 6px; }
 </style>
 <h1>RU → EN Live Subtitles</h1>
 <button id="toggle">Start on this tab</button>
-<label>Translator
-  <select id="engine">
-    <option value="auto">Auto (Yandex classic → Google → Yandex LLM)</option>
-    <option value="yandex-nmt">Yandex (classic)</option>
-    <option value="google">Google</option>
-    <option value="yandex">Yandex (LLM)</option>
-  </select>
-</label>
-<label>Display
-  <select id="display">
-    <option value="panel">Panel (history)</option>
-    <option value="subtitles">Subtitles (like YouTube)</option>
-  </select>
-</label>
-<label>Font size <input id="fontSize" type="number" min="12" max="48" /></label>
-<label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
-<label>Show Russian text <input id="showRu" type="checkbox" /></label>
-<label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
-<label title="Each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex classic (it provides the word matching).">Learning mode: color-match words <input id="learn" type="checkbox" /></label>
-<fieldset>
-  <legend>Record this class</legend>
-  <label>Mode
-    <select id="saveMode">
-      <option value="off">Off</option>
-      <option value="manual">Manual (start / stop)</option>
-      <option value="auto">Auto (every session)</option>
+
+<div class="tabs" role="tablist">
+  <button class="tab active" data-tab="basic" role="tab">Basic</button>
+  <button class="tab" data-tab="advanced" role="tab" title="Translation, learning, recording, sites">Advanced<span class="dot" id="advDot" title="Recording is running"></span></button>
+</div>
+
+<!-- Basic: what you change every day -->
+<section class="pane active" id="pane-basic">
+  <label>Display
+    <select id="display">
+      <option value="panel">Panel (history)</option>
+      <option value="subtitles">Subtitles (like YouTube)</option>
     </select>
   </label>
-  <label><span><input id="saveTranscript" type="checkbox" /> Transcript (EN + RU)</span>
-    <select id="saveFormat">
-      <option value="md">Markdown (.md)</option>
-      <option value="srt">Subtitles (.srt)</option>
-      <option value="txt">Plain text (.txt)</option>
-      <option value="json">JSON (.json)</option>
-    </select>
-  </label>
-  <label title="The tab's audio. With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio</span>
-    <select id="audioFormat">
-      <option value="mp3">MP3 — plays everywhere (~22 MB/h)</option>
-      <option value="webm">WebM/Opus — smallest (~15 MB/h)</option>
-    </select>
-  </label>
-  <button id="saveBtn">Start recording</button>
-  <div id="saveInfo"></div>
-  <div class="hint">Files go to Downloads/ru-en-subtitles/ · <a id="openFolder">open folder</a></div>
-</fieldset>
-<fieldset>
-  <legend>Sites</legend>
-  <label title="When this site starts playing sound, offer one-key start (Chrome requires a click or the shortcut to capture a tab)">
-    <span>Auto-start on <b id="curHost">this site</b></span><input id="autoHere" type="checkbox" /></label>
-  <div id="siteList"></div>
-  <div class="addrow"><input id="addPattern" placeholder="add site, e.g. *.zoom.us" /><button id="addBtn">Add</button></div>
-  <div class="hint">★ = auto-start · sites you've used are remembered</div>
-</fieldset>
+  <label>Font size <input id="fontSize" type="number" min="12" max="48" /></label>
+  <label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
+  <label>Show Russian text <input id="showRu" type="checkbox" /></label>
+</section>
+
+<!-- Advanced: everything else, grouped -->
+<section class="pane" id="pane-advanced">
+  <fieldset>
+    <legend>Translation</legend>
+    <label>Translator
+      <select id="engine">
+        <option value="auto" title="Yandex classic → Google → Yandex LLM">Auto (best order)</option>
+        <option value="yandex-nmt">Yandex (classic)</option>
+        <option value="google">Google</option>
+        <option value="yandex">Yandex (LLM)</option>
+      </select>
+    </label>
+    <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
+  </fieldset>
+  <fieldset>
+    <legend>Learning</legend>
+    <label title="Each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex classic (it provides the word matching).">Color-match words <input id="learn" type="checkbox" /></label>
+  </fieldset>
+  <fieldset>
+    <legend>Record this class</legend>
+    <label>Mode
+      <select id="saveMode">
+        <option value="off">Off</option>
+        <option value="manual">Manual (start / stop)</option>
+        <option value="auto">Auto (every session)</option>
+      </select>
+    </label>
+    <label title="Both languages, with timestamps"><span><input id="saveTranscript" type="checkbox" /> Transcript</span>
+      <select id="saveFormat">
+        <option value="md">Markdown (.md)</option>
+        <option value="srt">Subtitles (.srt)</option>
+        <option value="txt">Plain text (.txt)</option>
+        <option value="json">JSON (.json)</option>
+      </select>
+    </label>
+    <label title="The tab's audio. With the .srt format it plays with subtitles in VLC/mpv."><span><input id="saveAudio" type="checkbox" /> Audio</span>
+      <select id="audioFormat">
+        <option value="mp3" title="Plays on any device, ~22 MB per hour">MP3 (any device)</option>
+        <option value="webm" title="Smallest files, ~15 MB per hour">WebM (smallest)</option>
+      </select>
+    </label>
+    <button id="saveBtn">Start recording</button>
+    <div id="saveInfo"></div>
+    <div class="hint">Files go to Downloads/ru-en-subtitles/ · <a id="openFolder">open folder</a></div>
+  </fieldset>
+  <fieldset>
+    <legend>Sites</legend>
+    <label title="When this site starts playing sound, offer one-key start (Chrome requires a click or the shortcut to capture a tab)">
+      <span>Auto-start on <b id="curHost">this site</b></span><input id="autoHere" type="checkbox" /></label>
+    <div id="siteList"></div>
+    <div class="addrow"><input id="addPattern" placeholder="add site, e.g. *.zoom.us" /><button id="addBtn">Add</button></div>
+    <div class="hint">★ = auto-start · sites you've used are remembered</div>
+  </fieldset>
+</section>
+
 <div class="srv">Local server: <span id="srv">checking…</span></div>
-<div class="hint">Shortcut: Alt+Shift+Y</div>
+<div class="hint">Shortcut: <span id="shortcut">Alt+Shift+Y</span> · <a id="shortcuts">change</a></div>
 <script src="popup.js" type="module"></script>

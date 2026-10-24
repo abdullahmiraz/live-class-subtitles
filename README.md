@@ -27,7 +27,10 @@ Requirements: Linux (tested on Ubuntu with PipeWire), Google Chrome 138+, Python
    ```
 2. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick the `extension/` folder (once; after code updates click the reload ↻ icon).
 3. On the class tab: click the extension icon → **Start on this tab** (or press **Alt+Shift+Y**). Drag the subtitle box anywhere; it follows fullscreen video.
-4. Popup settings: translator (Auto = Yandex classic → Google), font size, background opacity, show/hide Russian, hide sentences spoken in English, **learning mode**, and **record this class** (Off / Manual / Auto, transcript + format, audio).
+4. Popup settings in two tabs:
+   - **Basic**: display mode (subtitles / panel), font size, background opacity, show Russian.
+   - **Advanced**: Translation (translator, hide English sentences), Learning (color-match words), Record this class (Off / Manual / Auto, transcript + format, audio), Sites (auto-start).
+   The popup remembers the last tab you used.
 5. In the box: drag the header to move it, drag the corner to resize, use A−/A+ for text size and ▾ for compact mode. Size and position are remembered per website.
 
 Stop: click **Stop**, press Alt+Shift+Y again, or close the tab. Stop the server with Ctrl+C.

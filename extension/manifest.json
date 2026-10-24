@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RU→EN Live Subtitles",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Live Russian→English subtitles for any tab. Speech recognition runs on your own PC.",
   "permissions": ["tabCapture", "offscreen", "storage", "activeTab", "downloads", "scripting"],
   "background": { "service_worker": "background.js", "type": "module" },
