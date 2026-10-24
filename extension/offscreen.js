@@ -78,6 +78,12 @@ async function start(streamId) {
 }
 
 // ---------- audio recording ----------
+let lameLoaded;
+const loadLame = () => (lameLoaded ||= new Promise((resolve, reject) => {
+  const el = Object.assign(document.createElement("script"), { src: "vendor/lame.min.js", onload: resolve, onerror: reject });
+  document.head.append(el);
+}));
+
 async function startRecording(format = "mp3") {
   recWanted = true;
   recFormat = format;
@@ -88,6 +94,7 @@ async function startRecording(format = "mp3") {
     recStarting = true;
     // MP3 plays on any device. Chrome can't encode it, so LAME (vendor/lame.min.js) does,
     // from a 24 kHz mono copy of the tab audio: ~22 MB/hour, plenty for voice, light on CPU.
+    try { await loadLame(); } catch (e) { recStarting = false; throw e; } // 150 KB, loaded only for MP3
     const ctx = new AudioContext({ sampleRate: 24000 });
     await ctx.audioWorklet.addModule("pcm-worklet.js");
     const node = new AudioWorkletNode(ctx, "pcm-worklet");

@@ -15,7 +15,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r server/requirements.txt pytest
       - run: python -m pytest -q server/tests
-      - run: python -m py_compile server/*.py server/dev/*.py
+      - run: python -m py_compile server/*.py server/dev/*.py store/*.py
 
   extension:
     runs-on: ubuntu-latest
@@ -34,10 +34,13 @@ jobs:
             const m = require("./extension/manifest.json");
             for (const p of ["tabCapture", "offscreen", "storage"]) if (!m.permissions.includes(p)) throw new Error("missing " + p);
             if (m.manifest_version !== 3) throw new Error("not MV3");
+            if (m.content_scripts || m.host_permissions) throw new Error("no always-on site access: inject on demand (store review)");
+            const fs = require("fs");
+            for (const f of Object.values(m.icons)) if (!fs.existsSync("extension/" + f)) throw new Error("missing icon " + f);
             console.log("manifest ok:", m.name, m.version);'
 
   shell:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n start.sh && bash -n install-autostart.sh && bash -n server/download_models.sh
+      - run: bash -n start.sh && bash -n install-autostart.sh && bash -n install.sh && bash -n package.sh && bash -n server/download_models.sh

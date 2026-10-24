@@ -28,10 +28,11 @@ from pathlib import Path
 import numpy as np
 import websockets
 
-from engine import SAMPLE_RATE, EnglishASR, FinalASR, PartialASR, looks_english, make_vad
+from engine import GIGAAM, SAMPLE_RATE, EnglishASR, FinalASR, PartialASR, looks_english, make_vad
 from lookup import lemmas, lookup
 from translate import ENGINES, translate_chain, yandex_aligned
 
+FINAL_MODEL_OK = (GIGAAM / "encoder.int8.onnx").exists()
 VAD_WINDOW = 512  # samples, required by Silero VAD at 16 kHz
 PARTIAL_EVERY = 0.35  # seconds between partial updates
 MAX_GAIN = 8.0
@@ -39,10 +40,52 @@ TRANSCRIPTS = Path(__file__).parent / "transcripts"
 SAVE_TRANSCRIPTS = False  # set by --save-transcripts; normal saving is done by the extension (user's choice)
 PARTIAL_TRANSLATE_EVERY = 1.5  # seconds between online translations of live text
 
-final_asr: FinalASR
-english_asr: EnglishASR
+THREADS = 4  # set by --threads
+IDLE_UNLOAD = 300.0  # seconds with no client before the models are freed (the idle server then uses ~40 MB)
+final_asr: FinalASR | None = None  # loaded when the first client connects (~1.5 s)
+english_asr: EnglishASR | None = None  # loaded the first time someone speaks English (~0.5 s)
+sessions = 0
+unload_timer: asyncio.TimerHandle | None = None
 pool = ThreadPoolExecutor(max_workers=2)  # translation
 asr_pool = ThreadPoolExecutor(max_workers=1)  # all speech recognition runs on ONE thread (sherpa-onnx is not safe to mix across threads)
+def load_final():  # asr_pool
+    global final_asr
+    if final_asr is None:
+        t = time.time()
+        final_asr = FinalASR(THREADS)
+        print(f"speech model loaded in {time.time() - t:.1f}s", flush=True)
+    return final_asr
+
+
+def load_english():  # asr_pool
+    global english_asr
+    if english_asr is None:
+        english_asr = EnglishASR(THREADS)
+    return english_asr
+
+
+def unload():  # asr_pool
+    global final_asr, english_asr
+    if sessions == 0 and final_asr is not None:
+        final_asr = english_asr = None
+        import ctypes
+        import gc
+        gc.collect()
+        try:  # hand the freed model memory back to the OS (glibc keeps it otherwise)
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except OSError:
+            pass
+        print(f"no clients for {IDLE_UNLOAD:.0f}s: speech models unloaded", flush=True)
+
+
+def schedule_unload():
+    global unload_timer
+    if unload_timer:
+        unload_timer.cancel()
+    loop = asyncio.get_running_loop()
+    unload_timer = loop.call_later(IDLE_UNLOAD, lambda: loop.run_in_executor(asr_pool, unload))
+
+
 class Session:
     def __init__(self, ws, label, chain, hide_en=False, learn=False):
         self.ws, self.chain, self.hide_en, self.learn = ws, chain, hide_en, learn
@@ -70,7 +113,7 @@ class Session:
     async def init(self):
         # every sherpa-onnx object is created and used only on asr_pool (one thread)
         loop = asyncio.get_running_loop()
-        self.vad, self.partial = await loop.run_in_executor(asr_pool, lambda: (make_vad(), PartialASR()))
+        self.vad, self.partial = await loop.run_in_executor(asr_pool, lambda: (make_vad(), PartialASR(), load_final())[:2])
         self.worker = asyncio.create_task(self.final_worker())
 
     def write_log(self, text):
@@ -183,7 +226,7 @@ class Session:
 
     async def final(self, samples, start):
         loop = asyncio.get_running_loop()
-        ru = (await loop.run_in_executor(asr_pool, final_asr, samples)).replace("<unk>", "").strip()
+        ru = (await loop.run_in_executor(asr_pool, lambda: load_final()(samples))).replace("<unk>", "").strip()
         if not any(c.isalpha() for c in ru):  # silence / noise / decoder glitch
             print(f"[final] no words in a {len(samples) / SAMPLE_RATE:.1f}s segment at {start:.1f}s (skipped)", flush=True)
             await self.send(type="partial", ru="", en="")
@@ -196,7 +239,7 @@ class Session:
                 await self.send(type="partial", ru="", en="")
                 print(f"[{stamp}] (English sentence hidden)", flush=True)
                 return
-            en = await loop.run_in_executor(asr_pool, english_asr, samples)
+            en = await loop.run_in_executor(asr_pool, lambda: load_english()(samples))
             if sum(c.isalpha() for c in en) < 2:  # Whisper glitch (e.g. "!!!!!!"): don't show garbage
                 print(f"[{stamp}] dropped unclear sentence [GigaAM heard: {ru[:80]}] [Whisper: {en[:40]}]", flush=True)
                 await self.send(type="partial", ru="", en="")
@@ -233,6 +276,13 @@ class Session:
 
 
 async def handler(ws):
+    # Only the extension (and local tools, which send no Origin) may use the server. Without this any web
+    # page could open ws://127.0.0.1:8765, since browsers don't apply CORS to WebSockets.
+    origin = ws.request.headers.get("Origin") if ws.request else None
+    if origin and not origin.startswith("chrome-extension://"):
+        print(f"refused a connection from {origin[:60]}", flush=True)
+        await ws.close(1008, "only the RU→EN Live Subtitles extension may connect")
+        return
     url = urllib.parse.urlparse(ws.request.path if ws.request else "/")
     label = (url.path.strip("/") or "tab").replace("/", "_")[:40]
     if label == "ping":  # popup health check
@@ -256,7 +306,11 @@ async def handler(ws):
     hide_en = q.get("hide_en", ["0"])[0] == "1"
     learn = q.get("learn", ["0"])[0] == "1"
     print(f"client connected: {label} (engine={chain}, hide English={hide_en}, learning mode={learn})", flush=True)
+    global sessions
     s = Session(ws, label, chain, hide_en, learn)
+    sessions += 1
+    if unload_timer:
+        unload_timer.cancel()
     try:
         await s.init()
         await s.send(type="ready")
@@ -269,12 +323,15 @@ async def handler(ws):
         pass
     finally:
         await s.close()
+        sessions -= 1
+        if sessions == 0:
+            schedule_unload()
         print("client disconnected" + (f", server log: {s.log}" if s.log else ""), flush=True)
 
 
 def selftest():
     """Popup "Test" button: is everything this server needs working right now?"""
-    out = {"server": "ok", "speech": "ok" if final_asr else "not loaded", "translators": {}}
+    out = {"server": "ok", "speech": "ok" if final_asr else ("ok (loads on Start)" if FINAL_MODEL_OK else "models missing: run start.sh"), "translators": {}}
     for name, fn in ENGINES.items():
         t = time.monotonic()
         try:
@@ -286,18 +343,19 @@ def selftest():
 
 
 async def main():
-    global final_asr, english_asr, SAVE_TRANSCRIPTS
+    global THREADS, IDLE_UNLOAD, SAVE_TRANSCRIPTS
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--threads", type=int, default=4, help="CPU threads for speech recognition")
+    ap.add_argument("--unload-after", type=float, default=IDLE_UNLOAD, help="free the speech models after this many idle seconds")
     ap.add_argument("--save-transcripts", action="store_true", help="also keep a debug log of every session in server/transcripts/")
     a = ap.parse_args()
     SAVE_TRANSCRIPTS = a.save_transcripts
-    t = time.time()
-    final_asr = FinalASR(a.threads)
-    english_asr = EnglishASR(a.threads)
-    print(f"models loaded in {time.time() - t:.1f}s, listening on ws://{a.host}:{a.port}", flush=True)
+    THREADS, IDLE_UNLOAD = a.threads, a.unload_after
+    if not FINAL_MODEL_OK:
+        raise SystemExit("speech models missing: run ./download_models.sh (start.sh does it for you)")
+    print(f"listening on ws://{a.host}:{a.port} (speech models load when a client connects)", flush=True)
     async with websockets.serve(handler, a.host, a.port, max_size=2**22):
         await asyncio.Future()
 

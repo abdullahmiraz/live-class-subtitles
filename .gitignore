@@ -25,3 +25,7 @@ server/dev/bench_results/
 
 # Local agent settings (keep CLAUDE.md / AGENTS.md)
 .claude/settings.local.json
+
+# Store builds (./package.sh)
+dist/
+store/build/

@@ -19,7 +19,7 @@ if [ "${1:-}" = "restart" ] || [ "${1:-}" = "stop" ]; then
   shift
 fi
 
-if port_busy; then
+if port_busy && [ "${1:-}" != "setup" ]; then
   echo "The subtitle server is already running (port 8765) — nothing to do."
   echo "After an update use: ./start.sh restart"
   exit 0
@@ -39,4 +39,6 @@ if [ "$(cat .venv/.requirements.sha256 2>/dev/null)" != "$REQ_HASH" ]; then
 fi
 
 ./download_models.sh
+# ./start.sh setup -> only prepare (environment + models), don't start; used by install.sh
+[ "${1:-}" = "setup" ] && { echo "Setup done."; exit 0; }
 exec .venv/bin/python server.py "$@"

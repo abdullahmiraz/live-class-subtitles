@@ -1,7 +1,7 @@
 // Service worker: owns capture state, creates the offscreen document, relays subtitles to the tab,
 // and keeps the transcript being saved (chrome.storage.session, so it survives SW restarts and page reloads).
 import { FORMATS, dataUrl, fileName, render } from "./transcript.js";
-import { autoRuleFor, forget, normPattern, recordUse, setAuto, sortedSites } from "./sites.js";
+import { autoRuleFor, forget, neededOrigins, normPattern, originsFor, recordUse, setAuto, sortedSites } from "./sites.js";
 
 const DEFAULTS = {
   server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
@@ -174,6 +174,28 @@ async function ensureContent(tabId) {
 // ---------- remembered sites + auto-start ----------
 const getSites = async () => (await chrome.storage.local.get("sites")).sites || {};
 const saveSites = (sites) => chrome.storage.local.set({ sites });
+
+// Site access: the extension has no access to any website by default. Ticking auto-start for a site asks
+// Chrome for that one site (popup.js), so the extension can see when it plays sound. Access no auto-start
+// pattern needs any more is handed back.
+async function prunePermissions(sites) {
+  const keep = new Set(neededOrigins(sites));
+  const { origins = [] } = await chrome.permissions.getAll();
+  const extra = origins.filter((o) => !keep.has(o));
+  if (extra.length) await chrome.permissions.remove({ origins: extra }).catch(() => {});
+}
+async function missingAccess(sites) {
+  const out = [];
+  for (const [p, s] of Object.entries(sites)) {
+    if (s.auto && !(await chrome.permissions.contains({ origins: originsFor(p) }).catch(() => false))) out.push(p);
+  }
+  return out;
+}
+async function changeSites(fn) {
+  const sites = fn(await getSites());
+  await saveSites(sites);
+  await prunePermissions(sites);
+}
 const snoozed = new Map(); // tabId -> until (ms): "Not now" on the auto-start prompt
 
 async function shortcutText() {
@@ -190,10 +212,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   if (cur && cur.tabId === tabId) return; // already running here
   const sites = await getSites();
   if (!Object.values(sites).some((s) => s.auto)) return; // nothing on the auto-start list: stay out of the way
-  const host = await ensureContent(tabId); // also works for tabs opened before the extension was reloaded
-  if (!host) return;
+  // the address is only visible for sites the user granted (auto-start sites), so nothing else is touched
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  let host = "";
+  try { host = new URL(tab.url).hostname; } catch { return; }
   const rule = autoRuleFor(host, sites);
-  if (!rule) return;
+  if (!rule || !(await ensureContent(tabId))) return;
   snoozed.set(tabId, Date.now() + 60_000); // at most one prompt per minute per tab
   chrome.tabs.sendMessage(tabId, { type: "autostart-prompt", host, rule, shortcut: await shortcutText(), busy: !!cur }).catch(() => {});
 });
@@ -294,16 +318,24 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case "ended": await stop(); break;
       case "lookup": return reply(await serverRequest("lookup", { w: msg.word }));
       case "duck": toOffscreen({ type: "duck", on: !!msg.on }, 1000); break;
-      case "sites-get": return reply({ sites: sortedSites(await getSites()), shortcut: await shortcutText() });
-      case "site-auto": await saveSites(setAuto(await getSites(), msg.pattern, msg.auto)); break;
-      case "site-forget": await saveSites(forget(await getSites(), msg.pattern)); break;
+      case "sites-get": {
+        const sites = await getSites();
+        return reply({ sites: sortedSites(sites), missing: await missingAccess(sites), shortcut: await shortcutText() });
+      }
+      case "site-auto": await changeSites((s) => setAuto(s, msg.pattern, msg.auto)); break;
+      case "site-forget": await changeSites((s) => forget(s, msg.pattern)); break;
+      case "popup-open": { // opening the popup grants this tab again: bring back a lost overlay (page reloaded)
+        const cur = await state();
+        if (cur && cur.tabId === msg.tabId) await showOverlay(msg.tabId);
+        break;
+      }
       case "page-host": { // popup fallback: which site is the active tab on? (injects the page script if missing)
         const host = await ensureContent(msg.tabId);
         return reply({ host: host || "", pattern: host ? normPattern(host) : "" });
       }
       case "prompt-snooze": if (sender.tab) snoozed.set(sender.tab.id, Date.now() + 10 * 60_000); break;
       case "prompt-never": // "Don't ask on this site"
-        if (msg.pattern) await saveSites(setAuto(await getSites(), msg.pattern, false));
+        if (msg.pattern) await changeSites((s) => setAuto(s, msg.pattern, false));
         break;
     }
     reply(true);
@@ -327,7 +359,8 @@ chrome.commands.onCommand.addListener(async (cmd, tab) => {
   }
 });
 
-// Page reloaded/navigated inside the captured tab: show the overlay (and saving indicator) again.
+// Page reloaded/navigated inside the captured tab: show the overlay (and saving indicator) again. Works while
+// Chrome still grants this tab (same site, or an auto-start site); otherwise clicking the icon brings it back.
 chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   const cur = await state();
   if (!cur || cur.tabId !== tabId || info.status !== "complete") return;
@@ -338,4 +371,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const cur = await state();
   if (cur && cur.tabId === tabId) await stop();
+});
+
+// First install: open the setup page (the companion server has to be installed once).
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === "install") chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
 });

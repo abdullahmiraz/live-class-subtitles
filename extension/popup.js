@@ -1,4 +1,5 @@
 import { toAnki } from "./transcript.js";
+import { originsFor } from "./sites.js";
 const DEFAULTS = {
   server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
   saveMode: "off", saveFormat: "md", saveTranscript: true, saveAudio: false, audioFormat: "mp3", learn: false, bgOpacity: 0.88, display: "panel",
@@ -9,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 const bg = (m) => chrome.runtime.sendMessage({ target: "background", ...m });
 
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+bg({ type: "popup-open", tabId: tab.id }); // brings back the subtitles if this captured page was reloaded
 const settings = { ...DEFAULTS, ...(await chrome.storage.sync.get(Object.keys(DEFAULTS))) };
 
 // ---------- Basic / Advanced tabs (last used tab is remembered) ----------
@@ -79,8 +81,16 @@ $("openFolder").onclick = () => chrome.downloads.showDefaultFolder();
 
 // ---------- sites: remembered + auto-start ----------
 let here = { host: "", pattern: "" };
+/** Auto-start needs access to that one site (to notice it playing sound). Chrome shows its prompt only
+ * during a click, so permissions.request() must be the first thing the click handler does. */
+async function setAutoSite(pattern, on) {
+  const asked = on ? chrome.permissions.request({ origins: originsFor(pattern) }).catch(() => false) : null;
+  await bg({ type: "site-auto", pattern, auto: on });
+  if (asked && !(await asked)) await bg({ type: "site-auto", pattern, auto: false }); // access declined
+  refreshSites();
+}
 async function refreshSites() {
-  const { sites, shortcut } = await bg({ type: "sites-get" });
+  const { sites, missing = [], shortcut } = await bg({ type: "sites-get" });
   if (shortcut) $("shortcut").textContent = shortcut;
   const list = $("siteList");
   list.replaceChildren();
@@ -91,9 +101,16 @@ async function refreshSites() {
     row.innerHTML = `<input type="checkbox" title="Auto-start on this site" /><span class="n"></span><span class="u"></span><button class="x" title="Forget this site">✕</button>`;
     const cb = row.querySelector("input");
     cb.checked = !!s.auto;
-    cb.onchange = async () => { await bg({ type: "site-auto", pattern, auto: cb.checked }); refreshSites(); };
+    cb.onchange = () => setAutoSite(pattern, cb.checked);
     row.querySelector(".n").textContent = (s.auto ? "★ " : "") + pattern;
     row.querySelector(".u").textContent = s.used ? `${s.used}× · ${fmtDate(s.last)}` : "";
+    if (missing.includes(pattern)) { // auto-start is on but Chrome access was never given (or was removed)
+      const a = document.createElement("a");
+      a.textContent = "allow";
+      a.title = "Auto-start needs access to this site to notice it playing sound";
+      a.onclick = () => setAutoSite(pattern, true);
+      row.querySelector(".u").replaceWith(a);
+    }
     row.querySelector(".x").onclick = async () => { await bg({ type: "site-forget", pattern }); refreshSites(); };
     list.append(row);
   }
@@ -112,17 +129,12 @@ async function refreshSites() {
   $("autoHere").disabled = !here.host; // e.g. chrome:// pages
   refreshSites();
 });
-$("autoHere").onchange = async () => {
-  if (!here.pattern) return;
-  await bg({ type: "site-auto", pattern: here.pattern, auto: $("autoHere").checked });
-  refreshSites();
-};
-$("addBtn").onclick = async () => {
+$("autoHere").onchange = () => here.pattern && setAutoSite(here.pattern, $("autoHere").checked);
+$("addBtn").onclick = () => {
   const v = $("addPattern").value.trim();
   if (!v) return;
-  await bg({ type: "site-auto", pattern: v, auto: true });
   $("addPattern").value = "";
-  refreshSites();
+  setAutoSite(v, true);
 };
 // ---------- Advanced: microphone setup, Test ----------
 $("micSetup").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("mic.html") });
@@ -210,7 +222,11 @@ $("bgOpacity").onchange = () => chrome.storage.sync.set({ bgOpacity: settings.bg
 try {
   const ws = new WebSocket(settings.server + "/ping");
   ws.onopen = () => { $("srv").textContent = "running"; $("srv").className = "ok"; ws.close(); };
-  ws.onerror = () => { $("srv").textContent = "not running — start it with start.sh"; $("srv").className = "bad"; };
+  ws.onerror = () => {
+    $("srv").className = "bad";
+    $("srv").innerHTML = 'not running · <a id="setupLink">set it up</a>';
+    $("setupLink").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  };
 } catch {}
 
 refresh();

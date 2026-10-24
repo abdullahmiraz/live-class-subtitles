@@ -68,3 +68,17 @@ export function forget(sites, pattern) {
 export function sortedSites(sites) {
   return Object.entries(sites || {}).sort(([, a], [, b]) => (b.auto - a.auto) || (b.last - a.last));
 }
+
+/** Chrome host permissions an auto-start pattern needs (so the extension can see when that site plays sound).
+ * "youtube.com" -> youtube.com and www.youtube.com; "*.zoom.us" -> zoom.us and every subdomain. */
+export function originsFor(pattern) {
+  pattern = normPattern(pattern);
+  if (!pattern) return [];
+  if (pattern.startsWith("*.")) return [`*://${pattern}/*`];
+  return [`*://${pattern}/*`, `*://www.${pattern}/*`];
+}
+
+/** Origins still needed by the auto-start list (anything else can be handed back to Chrome). */
+export function neededOrigins(sites) {
+  return [...new Set(Object.entries(sites || {}).filter(([, s]) => s && s.auto).flatMap(([p]) => originsFor(p)))];
+}

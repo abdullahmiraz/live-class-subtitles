@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width" />
+<title>RU→EN Live Subtitles · Setup</title>
+<style>
+  body { font: 15px/1.55 system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 20px; color: #222; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .lead { color: #555; margin-top: 0; }
+  h2 { font-size: 17px; margin: 28px 0 6px; }
+  .n { display: inline-block; width: 24px; height: 24px; border-radius: 50%; background: #1a73e8; color: #fff;
+    text-align: center; font-size: 14px; line-height: 24px; margin-right: 6px; }
+  pre { white-space: pre-wrap; word-break: break-all; background: #f3f4f6; border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; margin: 8px 0; }
+  button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; border-radius: 6px; background: #1a73e8; color: #fff; cursor: pointer; }
+  #status { font-weight: 600; }
+  .ok { color: #188038; } .bad { color: #c5221f; }
+  .hint { color: #777; font-size: 13px; }
+  kbd { background: #eee; border: 1px solid #ccc; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 13px; }
+  a { color: #1a73e8; }
+</style>
+<h1>RU → EN Live Subtitles</h1>
+<p class="lead">Live English subtitles for Russian audio in any tab. Free, no account, and the speech recognition runs on your
+  own computer.</p>
+
+<h2><span class="n">1</span>Install the companion (once)</h2>
+<p>Chrome can't run speech recognition by itself, so a small free server runs on your PC. On Linux, paste this into a
+  terminal:</p>
+<pre id="cmd">curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/ru-en-live-subtitles/main/install.sh | bash</pre>
+<button id="copy">Copy</button>
+<p class="hint">It downloads the speech models once (~350 MB) and starts by itself at login. It uses ~40 MB of memory
+  while idle; the models load only while subtitles are on. Manual setup and source:
+  <a href="https://github.com/abdullahmiraz/ru-en-live-subtitles#readme" target="_blank">GitHub</a>.</p>
+<p>Companion status: <span id="status">checking…</span></p>
+
+<h2><span class="n">2</span>Start subtitles</h2>
+<p>Open your class or video, then click the extension icon → <b>Start</b>, or press <kbd id="key">Alt+Shift+Y</kbd>.
+  Tip: pin the icon (puzzle piece → 📌).</p>
+
+<h2><span class="n">3</span>Make it yours</h2>
+<p><b>Basic</b>: panel or YouTube-style subtitles, size, recording a class. <b>Advanced</b>: microphone, translator,
+  auto-start sites. <b>Extra</b>: learning tools (word cards, vocabulary for Anki).</p>
+
+<h2>Privacy</h2>
+<p class="hint">Audio never leaves your computer: it goes only to the companion on your PC. Only the recognized text
+  is sent to a free translator (Yandex or Google) to get the English. No accounts, no analytics.
+  <a href="https://github.com/abdullahmiraz/ru-en-live-subtitles/blob/main/PRIVACY.md" target="_blank">Privacy policy</a></p>
+<script src="welcome.js" type="module"></script>

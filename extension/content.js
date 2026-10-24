@@ -401,7 +401,7 @@
     capEl.addEventListener("pointerup", () => { if (sx !== undefined) { sx = undefined; saveUi(); } });
     capEl.addEventListener("dblclick", () => { ui.capDx = ui.capDy = 0; saveUi(); placeCaptions(); });
     attach(capHost);
-    capTimer = setInterval(() => isSubs() && placeCaptions(), 500); // follow the video (theater mode, scrolling, resize)
+    capTimer = setInterval(() => isSubs() && !document.hidden && placeCaptions(), 500); // follow the video (theater mode, scrolling, resize)
   }
 
   /** The video being watched: the largest visible <video>, else the whole window. */

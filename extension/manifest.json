@@ -1,19 +1,45 @@
 {
   "manifest_version": 3,
   "name": "RU→EN Live Subtitles",
-  "version": "1.5.0",
+  "version": "1.6.0",
+  "minimum_chrome_version": "116",
   "description": "Live Russian→English subtitles for any tab. Speech recognition runs on your own PC.",
-  "permissions": ["tabCapture", "offscreen", "storage", "activeTab", "downloads", "scripting"],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "RU→EN Live Subtitles" },
-  "content_scripts": [
-    { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle", "all_frames": false }
+  "homepage_url": "https://github.com/abdullahmiraz/ru-en-live-subtitles",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "activeTab",
+    "downloads",
+    "scripting"
   ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RU→EN Live Subtitles",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
+  },
   "commands": {
     "toggle-capture": {
-      "suggested_key": { "default": "Alt+Shift+Y" },
+      "suggested_key": {
+        "default": "Alt+Shift+Y"
+      },
       "description": "Start/stop subtitles for the current tab"
     }
   },
-  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  }
 }

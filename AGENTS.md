@@ -14,19 +14,27 @@ Live Russian → English subtitles for any Chrome tab. A Chrome MV3 extension ca
 ```
 start.sh                     one-command start (creates venv + downloads models on first run)
 install-autostart.sh         optional systemd --user service
+install.sh                   one-line installer (curl | bash): clone/update into ~/.local/share/ru-en-live-subtitles,
+                             start.sh setup, autostart
+package.sh                   Chrome Web Store zip → dist/ (no tests, no .md)
+PRIVACY.md                   privacy policy (store listing links it)
+store/                       LISTING.md (copy-paste listing + permission justifications), screenshots.py (headless
+                             CDP, real extension), compose.py (final 1280x800 images + promo tile), subs.json fixture
 extension/                   Chrome MV3 extension (no build step, plain JS)
-  manifest.json              permissions: tabCapture, offscreen, storage, activeTab, downloads, scripting; shortcut Alt+Shift+Y
+  manifest.json              permissions: tabCapture, offscreen, storage, activeTab, downloads, scripting; optional
+                             host permissions (per auto-start site only); NO content_scripts (CI enforces); Alt+Shift+Y
+  welcome.html / .js         setup page opened on first install: install command + live companion status
   background.js              service worker: capture state, offscreen doc lifecycle, relays subtitles to the tab
   offscreen.js / .html       getUserMedia(tab) → plays audio back (tab is muted by capture) → 16 kHz AudioWorklet → WebSocket
   pcm-worklet.js             mono Int16 100 ms chunks
-  content.js                 two display modes: "subtitles" = English-only YouTube-style caption over the largest
+  content.js                 injected on demand (background ensureContent) into the captured tab; two display modes: "subtitles" = English-only YouTube-style caption over the largest
                              <video> (owner wants translation only there); "panel" = shadow-DOM box: history (newest at bottom, scrollback, "↓ new"), LIVE line,
                              resize grip, compact mode, A−/A+, bg opacity, "CC" pill, learning-mode word colors
   mic.html / mic.js          one-time microphone permission + device picker (offscreen docs can't prompt)
   sites.js                   pure site memory + auto-start rules (exact host or *.wildcard); tested by extension/tests
   transcript.js              pure transcript formatters (md/srt/txt/json) + data: URL; tested by extension/tests
   webm-duration.js           inserts the Duration Chrome's MediaRecorder leaves out of WebM; tested by extension/tests
-  popup.html / popup.js      start/stop + settings in two tabs. Basic = everything used day to day (owner wants it full):
+  popup.html / popup.js      start/stop + settings in three tabs. Basic = everything used day to day (owner wants it full):
                              display, fontSize, bgOpacity, capStyle/capColor, showRu, finalOnly, hideEn, learn,
                              auto-start-here, Record this class. Advanced = setup (audioSource/micId, translator, Test, site
                              list). Extra = learning (hoverCard, newOnly, ruFirst, readAloud, vocabulary export/clear).
@@ -69,6 +77,14 @@ node --test extension/tests/*.test.mjs       # transcript formatter tests
 Load the extension: `chrome://extensions` → Developer mode → Load unpacked → `extension/`.
 
 ## Gotchas learned the hard way
+- **The server loads speech models lazily.** GigaAM loads on the first client (`load_final()`, ~1.5 s) and Whisper on the first English sentence. Both are freed `--unload-after` seconds (default 300) after the last client leaves, followed by `malloc_trim(0)`; without it, glibc keeps ~350 MB. Everything happens on `asr_pool`, so a reload is ordered after an unload.
+- **The server refuses WebSocket connections whose `Origin` isn't `chrome-extension://…`.** Browsers apply no CORS to WebSockets, so any web page could otherwise use the local server. Local tools send no Origin and are allowed.
+- **No always-on site access (Chrome Web Store review).**
+  - content.js is injected only via `chrome.scripting` into the tab the user invoked us on (activeTab).
+  - If a captured page reloads to a place activeTab no longer covers, opening the popup re-grants access and re-shows the overlay (`popup-open`).
+  - Auto-start sites get host permissions one site at a time. `popup.js setAutoSite()` must call `chrome.permissions.request()` as the very first thing in the click, because Chrome shows the prompt only during a gesture.
+  - `background.js prunePermissions()` gives back the access no auto-start site needs.
+  - Without the "tabs" permission, `tab.url` is visible only for granted sites. That's how the audible watcher knows the site.
 - **Copy `vad.front.samples` BEFORE `vad.pop()`.** pop() frees the segment in C++. Reading it afterwards returns random memory, so GigaAM outputs `<unk><unk>…`, Whisper outputs "!!!!!!", and sentences go missing, intermittently (about 1 in 3 sessions). This was the real cause of those glitches for a long time. Check: replaying the same audio must give byte-identical segment hashes every run.
 - All sherpa-onnx objects (VAD, live model, GigaAM, Whisper) are created and used only on the single-thread `asr_pool`. `Session._process()` does gain + VAD + live recognition for one chunk in one hop and returns events.
 - **Alt+Shift+T is reserved by Chrome** (focus toolbar), so an extension command with it silently never registers. We use Alt+Shift+Y.

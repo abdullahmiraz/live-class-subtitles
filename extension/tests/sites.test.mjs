@@ -45,3 +45,12 @@ test("forget and sort", () => {
   s = forget(s, "A.com");
   assert.deepEqual(Object.keys(s), ["b.com"]);
 });
+
+test("host permissions for auto-start patterns", async () => {
+  const { originsFor, neededOrigins } = await import("../sites.js");
+  assert.deepEqual(originsFor("https://www.YouTube.com/watch"), ["*://youtube.com/*", "*://www.youtube.com/*"]);
+  assert.deepEqual(originsFor("*.zoom.us"), ["*://*.zoom.us/*"]);
+  assert.deepEqual(originsFor(""), []);
+  const sites = { "youtube.com": { auto: true }, "*.zoom.us": { auto: false }, "x.ru": { auto: true } };
+  assert.deepEqual(neededOrigins(sites).sort(), ["*://www.x.ru/*", "*://www.youtube.com/*", "*://x.ru/*", "*://youtube.com/*"]);
+});
