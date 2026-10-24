@@ -139,6 +139,7 @@
     dragMove(root.querySelector(".head"));
     dragResize(root.querySelector(".grip"));
     chrome.storage.local.get(KEY).then((r) => { ui = { ...ui, ...(r[KEY] || {}) }; layout(); });
+    if (isSubs()) box.style.display = "none"; // subtitle mode: never flash the panel
     layout();
     apply();
     mount();
@@ -284,6 +285,7 @@
   }
 
   function showStatus() {
+    renderCapStatus();
     if (!statusEl) return;
     const rec = saving && [saving.audio && "audio", saving.transcript && `${saving.count} lines`].filter(Boolean).join(" + ");
     statusEl.textContent = (live ? "● live" : "server offline — run start.sh") + (saving ? `  ·  ⏺ recording ${rec}` : "");
@@ -318,7 +320,7 @@
     if (m.lang === "en") { it.querySelector(".en").textContent = m.en; ru.textContent = "spoken in English"; ru.classList.add("said-en"); }
     else colorize(it.querySelector(".en"), ru, m);
     histEl.appendChild(it);
-    lastFinal = m; liveCue = null; renderCaptions();
+    lastFinal = m; liveCue = null; playFinal(m);
     while (histEl.children.length > MAX_HISTORY) histEl.firstElementChild.remove();
     setLive("", "");
     if (stick || ui.compact) scrollToEnd();
@@ -338,6 +340,9 @@
     .cue span.txt { background: rgba(8, 8, 8, var(--bg-a, .75)); padding: .06em .38em; border-radius: 3px;
       -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .cue.prev { opacity: .78; }
+    .stat { font: 12px/1.4 system-ui, sans-serif; color: #ddd; background: rgba(8,8,8,.7); padding: 2px 8px; border-radius: 10px;
+      align-self: center; margin-bottom: 4px; pointer-events: auto; }
+    .stat.bad { color: #ffb0b0; }
     .cue.now .txt { font-weight: 500; }
     .ru { font-size: .66em; color: #e8e2c0; }
     .w { color: var(--c); }
@@ -364,7 +369,7 @@
         <button class="btn" data-a="panel" title="Back to the panel (history)">▤ panel</button>
         <button class="btn" data-a="smaller">A−</button><button class="btn" data-a="bigger">A+</button>
         <button class="btn" data-a="hide" title="Hide">✕</button>
-      </div><div class="cap gone"></div></div>`;
+      </div><div class="cap gone"></div><div class="statrow" style="display:flex;justify-content:center"></div></div>`;
     capEl = capRoot.querySelector(".cap");
     capRoot.querySelectorAll(".btn").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); action(b.dataset.a); }));
     // drag to move (offset from the automatic spot), double-click to reset
@@ -380,10 +385,17 @@
   /** The video being watched: the largest visible <video>, else the whole window. */
   function videoRect() {
     let best = null, area = 0;
+    const visibleArea = (r) => Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) * Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
     for (const v of document.querySelectorAll("video")) {
-      const r = v.getBoundingClientRect();
-      const visible = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) * Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
-      if (visible > area && r.width > 200 && r.height > 120) { best = r; area = visible; }
+      const r = v.getBoundingClientRect(), a = visibleArea(r);
+      if (a > area && r.width > 200 && r.height > 120) { best = r; area = a; }
+    }
+    // players inside an <iframe> (Zoom web, embedded players): use a big iframe if there's no big video
+    if (area < innerWidth * innerHeight * 0.12) {
+      for (const f of document.querySelectorAll("iframe")) {
+        const r = f.getBoundingClientRect(), a = visibleArea(r);
+        if (a > area && a > innerWidth * innerHeight * 0.2) { best = r; area = a; }
+      }
     }
     if (!best) return { left: 0, top: 0, width: innerWidth, height: innerHeight, bottom: innerHeight };
     const top = Math.max(best.top, 0), bottom = Math.min(best.bottom, innerHeight);
@@ -414,19 +426,93 @@
     return d;
   }
 
+  // ---- 2-line captions, like real subtitles ----
+  // How many characters fit on two caption lines at the current size (YouTube/Netflix: ~42 per line).
+  function maxChars() {
+    const w = capHost ? capHost.getBoundingClientRect().width || 800 : 800;
+    const px = Math.round(settings.fontSize * 1.15);
+    return 2 * Math.max(18, Math.min(48, Math.floor((w * 0.92) / (px * 0.52))));
+  }
+
+  /** Split a long sentence into ≤2-line pieces, breaking after punctuation when possible. */
+  function chunks(text, max) {
+    const words = text.split(/\s+/).filter(Boolean), out = [];
+    let cur = "";
+    for (const w of words) {
+      const next = cur ? cur + " " + w : w;
+      if (next.length > max && cur) { out.push(cur); cur = w; continue; }
+      cur = next;
+      if (/[,;:.!?—]$/.test(w) && cur.length > max * 0.55) { out.push(cur); cur = ""; } // natural break
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+
+  /** A piece of `m` (en substring starting at `from`) with its word-alignment shifted to match. */
+  function piece(m, text, from) {
+    const align = (m.align || []).filter(([, , es, el]) => es >= from && es + el <= from + text.length)
+      .map(([rs, rl, es, el]) => [rs, rl, es - from, el]);
+    return { ...m, en: text, align };
+  }
+
+  let finalQueue = [], finalTimer = null;
+  function playFinal(m) {
+    clearTimeout(finalTimer);
+    const max = maxChars();
+    let from = 0;
+    finalQueue = chunks(m.en, max).map((t) => { const i = m.en.indexOf(t, from); from = i + t.length; return piece(m, t, Math.max(i, 0)); });
+    nextFinalChunk();
+  }
+  function nextFinalChunk() {
+    shownFinal = finalQueue.shift() || null;
+    renderCaptions();
+    if (finalQueue.length) {
+      // reading time: ~65 ms per character, 1.5–5 s per piece
+      finalTimer = setTimeout(nextFinalChunk, Math.max(1500, Math.min(5000, shownFinal.en.length * 65)));
+    } else finalTimer = null;
+  }
+  let shownFinal = null;
+
+  /** Live text: only the newest words that fit on two lines. */
+  function liveTail(c) {
+    const max = maxChars();
+    if (c.en.length <= max) return c;
+    let cut = c.en.length - (max - 1);
+    const sp = c.en.indexOf(" ", cut);
+    if (sp > 0 && sp < c.en.length - 8) cut = sp + 1;
+    const p = piece(c, c.en.slice(cut), cut);
+    return { ...p, en: "…" + p.en, align: p.align.map(([rs, rl, es, el]) => [rs, rl, es + 1, el]) };
+  }
+
   function renderCaptions() {
     if (!capEl || !isSubs()) return;
     capRoot.host.style.fontSize = Math.round(settings.fontSize * 1.15) + "px";
     capEl.style.setProperty("--bg-a", Math.max(0.15, Math.min(1, settings.bgOpacity ?? 0.88)) * 0.85);
-    // translation only, like YouTube captions: the sentence being spoken, else the last finished one
-    const cur = liveCue && liveCue.en && liveCue.en !== "…" ? liveCue : lastFinal;
+    // translation only: a finished sentence is played piece by piece; otherwise the live sentence
+    const live = liveCue && liveCue.en && liveCue.en !== "…" ? liveTail(liveCue) : null;
+    const cur = finalTimer ? shownFinal : live || shownFinal;
     const cues = cur ? [cueEl(cur, "now", false)] : [];
     capEl.replaceChildren(...cues);
     capEl.classList.toggle("gone", !cues.length);
+    renderCapStatus();
     placeCaptions();
     // like YouTube: captions disappear when nobody has spoken for a while
     clearTimeout(fadeTimer);
     if (!liveCue && cues.length) fadeTimer = setTimeout(() => capEl.classList.add("gone"), 7000);
+  }
+
+  /** Subtitle mode has no panel header, so show connection problems (and recording) as a small line. */
+  function renderCapStatus() {
+    if (!capRoot) return;
+    const row = capRoot.querySelector(".statrow");
+    const msg = !live ? "server offline — run start.sh" : saving ? "⏺ recording" : !lastFinal && !liveCue ? "● listening…" : "";
+    row.replaceChildren();
+    if (msg) {
+      const d = document.createElement("span");
+      d.className = "stat" + (!live ? " bad" : "");
+      d.textContent = msg;
+      row.append(d);
+    }
   }
 
   // ---------- learning mode: same color for a Russian word and its translation ----------
@@ -479,10 +565,57 @@
     }
   }
 
+  // ---------- auto-start prompt (Chrome needs one click/key to allow capturing a tab) ----------
+  let promptHost, promptTimer;
+  function hidePrompt() {
+    clearTimeout(promptTimer);
+    if (!promptHost) return;
+    const el = promptHost;
+    promptHost = null;
+    el.shadowRoot.querySelector(".toast").classList.add("out");
+    setTimeout(() => el.remove(), 250);
+  }
+  function showPrompt(m) {
+    if (host && host.isConnected && box && box.style.display !== "none") return; // already running here
+    hidePrompt();
+    promptHost = document.createElement("div");
+    promptHost.style.cssText = "all:initial;position:fixed;z-index:2147483647;left:50%;bottom:24px;transform:translateX(-50%);";
+    const r = promptHost.attachShadow({ mode: "open" });
+    const key = m.shortcut || "";
+    r.innerHTML = `<style>
+      .toast { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border-radius: 12px;
+        font: 14px/1.35 system-ui, "Segoe UI", Roboto, sans-serif; color: #fff; background: rgba(14,16,20,.94);
+        box-shadow: 0 8px 30px rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.1);
+        animation: in .3s cubic-bezier(.2,.7,.3,1); transition: opacity .25s, transform .25s; }
+      .toast.out { opacity: 0; transform: translateY(8px); }
+      @keyframes in { from { opacity: 0; transform: translateY(12px); } }
+      kbd { font: 600 13px system-ui, sans-serif; background: #2b3140; border: 1px solid #454d60; border-bottom-width: 2px;
+        border-radius: 6px; padding: 1px 7px; }
+      .muted { color: #9aa3b5; font-size: 12px; }
+      button { all: unset; cursor: pointer; font-size: 12px; color: #c6cddb; padding: 4px 8px; border-radius: 6px; }
+      button:hover { background: rgba(255,255,255,.12); color: #fff; }
+      @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+    </style>
+    <div class="toast">
+      <span>🎧</span>
+      <span><b>RU→EN subtitles</b> for <span class="h"></span>?<br>
+        <span class="muted">${key ? `Press <kbd>${key.replace(/\+/g, "</kbd>+<kbd>")}</kbd> or click` : "Click"} the RU→EN icon${m.busy ? " (moves subtitles to this tab)" : ""}</span></span>
+      <button class="later" title="Hide for 10 minutes">Not now</button>
+      <button class="never" title="Turn off auto-start for this site">Don't ask here</button>
+    </div>`;
+    r.querySelector(".h").textContent = m.host;
+    r.querySelector(".later").onclick = () => { chrome.runtime.sendMessage({ target: "background", type: "prompt-snooze" }); hidePrompt(); };
+    r.querySelector(".never").onclick = () => { chrome.runtime.sendMessage({ target: "background", type: "prompt-never", pattern: m.rule }); hidePrompt(); };
+    (document.fullscreenElement && !/^(VIDEO|IFRAME)$/.test(document.fullscreenElement.tagName) ? document.fullscreenElement : document.documentElement).appendChild(promptHost);
+    promptTimer = setTimeout(hidePrompt, 25000); // don't nag: it goes away by itself
+  }
+
   // ---------- messages from the extension ----------
   chrome.runtime.onMessage.addListener((m, _sender, reply) => {
-    if (m.type === "ping") return reply(true); // background checks the script is present
+    if (m.type === "ping") return reply({ host: location.hostname }); // background: script present + which site
+    if (m.type === "autostart-prompt") return showPrompt(m);
     if (m.type === "overlay-show") {
+      hidePrompt(); // subtitles started (e.g. via the shortcut the prompt suggested)
       if (typeof m.conn === "boolean") live = m.conn;
       clearTimeout(hideTimer); // restarted right after a save
       settings = { ...settings, ...m.settings };
@@ -496,7 +629,7 @@
         setTimeout(() => h && h.remove(), 250);
         host = statusEl = histEl = null;
         if (capHost) { capHost.remove(); capHost = null; clearInterval(capTimer); }
-        lastFinal = liveCue = null;
+        lastFinal = liveCue = shownFinal = null; finalQueue = []; clearTimeout(finalTimer); finalTimer = null;
         live = false; saving = null; startedAt = null; stick = true; unseen = 0; ui.hidden = false;
       };
       // just saved a file? keep the box up a moment so the "saved" notice is readable

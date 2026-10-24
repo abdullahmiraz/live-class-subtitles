@@ -61,6 +61,54 @@ $("saveBtn").onclick = async () => {
   }
 };
 $("openFolder").onclick = () => chrome.downloads.showDefaultFolder();
+
+// ---------- sites: remembered + auto-start ----------
+let here = { host: "", pattern: "" };
+async function refreshSites() {
+  const { sites } = await bg({ type: "sites-get" });
+  const list = $("siteList");
+  list.replaceChildren();
+  const fmtDate = (t) => (t ? new Date(t).toLocaleDateString() : "never used");
+  for (const [pattern, s] of sites) {
+    const row = document.createElement("div");
+    row.className = "site";
+    row.innerHTML = `<input type="checkbox" title="Auto-start on this site" /><span class="n"></span><span class="u"></span><button class="x" title="Forget this site">✕</button>`;
+    const cb = row.querySelector("input");
+    cb.checked = !!s.auto;
+    cb.onchange = async () => { await bg({ type: "site-auto", pattern, auto: cb.checked }); refreshSites(); };
+    row.querySelector(".n").textContent = (s.auto ? "★ " : "") + pattern;
+    row.querySelector(".u").textContent = s.used ? `${s.used}× · ${fmtDate(s.last)}` : "";
+    row.querySelector(".x").onclick = async () => { await bg({ type: "site-forget", pattern }); refreshSites(); };
+    list.append(row);
+  }
+  if (!sites.length) list.innerHTML = '<div class="hint" style="margin:2px 0">No sites yet: start subtitles somewhere and it appears here.</div>';
+  const mine = sites.find(([p]) => p === here.pattern);
+  $("autoHere").checked = !!(mine && mine[1].auto);
+}
+// The popup was opened by clicking the icon, so Chrome lets it read this tab's address (activeTab);
+// that works even on tabs opened before the extension was (re)loaded. Ask the page as a fallback.
+(tab.url && /^https?:/.test(tab.url)
+  ? Promise.resolve({ host: new URL(tab.url).hostname, pattern: new URL(tab.url).hostname.replace(/^www\./, "") })
+  : bg({ type: "page-host", tabId: tab.id })
+).then((r) => {
+  here = r || here;
+  $("curHost").textContent = here.host || "this site";
+  $("autoHere").disabled = !here.host; // e.g. chrome:// pages
+  refreshSites();
+});
+$("autoHere").onchange = async () => {
+  if (!here.pattern) return;
+  await bg({ type: "site-auto", pattern: here.pattern, auto: $("autoHere").checked });
+  refreshSites();
+};
+$("addBtn").onclick = async () => {
+  const v = $("addPattern").value.trim();
+  if (!v) return;
+  await bg({ type: "site-auto", pattern: v, auto: true });
+  $("addPattern").value = "";
+  refreshSites();
+};
+$("addPattern").onkeydown = (e) => e.key === "Enter" && $("addBtn").click();
 setInterval(refresh, 2000); // live sentence counter while the popup is open
 
 $("toggle").onclick = async () => {

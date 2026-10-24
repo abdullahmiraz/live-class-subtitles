@@ -11,7 +11,8 @@ Live English subtitles for any Chrome tab playing Russian speech (online classes
 - **English sentences**: if the speaker switches to English, that sentence is written down as said (Whisper-tiny) instead of being mistranslated. You can hide those sentences with a popup switch. Russian sentences with a few English words are always kept.
 - **Record a class**: keep the **transcript (EN + RU)**, the **audio**, or both, only if you choose it. Modes are **Off** (default), **Manual** (Start recording / Stop & save) and **Auto** (every session). Transcripts come as Markdown, SRT subtitles, plain text or JSON. Audio is the tab's sound as **MP3** (default, plays on any device, ~22 MB/hour) or Opus `.webm` (smallest, ~15 MB/hour). An `.srt` and the audio file from the same session play together in VLC/mpv. Files go to `Downloads/ru-en-subtitles/`.
 - **Learning mode**: each Russian word and its English translation get the **same color**, and hovering a word highlights its pair. It uses Yandex's word alignment, so you learn as you read instead of only translating.
-- **Two display modes**: **Subtitles**, which shows only the English translation as one caption line over the video like YouTube CC (it follows the video, fades in silence, and can be dragged; double-click resets it), or the **Panel**, which keeps the full history in both languages.
+- **Two display modes**: **Subtitles**, which shows only the English translation over the video like YouTube CC (it follows the video, even inside embedded players; never more than 2 lines, with long sentences shown in readable pieces; fades in silence; can be dragged and double-click resets it), or the **Panel**, which keeps the full history in both languages.
+- **Auto-start on your sites**: sites where you use subtitles are remembered (popup → Sites). Tick ★ auto-start (or add patterns like `*.zoom.us`), and when such a site starts playing sound a small prompt offers **one-key start** (Alt+Shift+Y). Chrome never lets an extension capture a tab without one click or key press, so this is as automatic as Chrome allows.
 - **Comfortable panel**: newest sentence at the bottom (like Meet/Teams captions), with the latest one highlighted and older ones fading. A separate **LIVE** line shows the sentence being spoken. You can scroll back through history, and a "↓ new" button appears if you scrolled up. The box is resizable (min 320 px), has compact/expanded modes, A−/A+ text size and adjustable background opacity, and ✕ shrinks it to a "CC" pill. Motion is gentle and respects "reduce motion".
 
 ## Use it
@@ -114,13 +115,15 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
 15. **Learning mode.** Yandex word alignment colors each Russian word and its translation the same, including the live line.
 16. **Record a class (#3).** Audio and/or transcript. Chrome on Linux can't record MP3/AAC, so MP3 is encoded with lamejs; a WebM option keeps files smallest, with the missing length patched into the file. An MP3 race that doubled the audio was found and fixed.
 17. **Owner's choices.** Yandex classic is the default translator. Subtitle mode is translation-only, like YouTube CC. The license is PolyForm Strict (personal use only).
+18. **Auto-start + remembered sites (#2).** A headless test confirmed Chrome blocks tab capture until the user invokes the extension ("Extension has not been invoked for the current page"). So listed sites get a one-key prompt when they start playing sound. The popup reads the site from the tab address, so it works on tabs opened before an extension reload. Subtitle mode was debugged with headless screenshots: 2-line limit, long sentences in pieces, live tail, status line, iframe players.
 
 ## Roadmap
 Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues?q=label%3Anext-stage)):
 - ~~Save translations (both languages) to a file~~ ✅ done (v1.1)
 - ~~Record the class audio~~ ✅ done (v1.2)
 - Learning-mode ideas: vocabulary list, Anki export, stress marks, Russian-first recall mode…
-- Auto-start on websites you list, and remember sites you've used it on.
+- ~~Auto-start on listed websites + remember used sites~~ ✅ done (v1.4, one-key start because Chrome requires a gesture)
+- Borrowed ideas: final-only switch, microphone source, read aloud, caption outline, test button (#5)
 
 ## License
 Copyright © 2026 Abdullah Miraz. **Source-available, not open source.** Licensed under the [PolyForm Strict License 1.0.0](LICENSE):

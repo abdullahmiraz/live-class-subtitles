@@ -1,6 +1,7 @@
 // Service worker: owns capture state, creates the offscreen document, relays subtitles to the tab,
 // and keeps the transcript being saved (chrome.storage.session, so it survives SW restarts and page reloads).
 import { FORMATS, dataUrl, fileName, render } from "./transcript.js";
+import { autoRuleFor, forget, normPattern, recordUse, setAuto, sortedSites } from "./sites.js";
 
 const DEFAULTS = {
   server: "ws://127.0.0.1:8765", engine: "auto", showRu: true, hideEn: false, fontSize: 26,
@@ -133,20 +134,51 @@ const finishSaving = () => serial(async () => {
 // ---------- page script ----------
 // Tabs opened before the extension was (re)loaded don't have content.js yet: inject it on demand.
 async function ensureContent(tabId) {
-  try {
-    if (await chrome.tabs.sendMessage(tabId, { type: "ping" })) return;
-  } catch {}
+  const ask = () => chrome.tabs.sendMessage(tabId, { type: "ping" }).then((r) => (r && r.host) || "").catch(() => null);
+  let host = await ask();
+  if (host !== null) return host;
   try {
     await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+    host = await ask();
   } catch (e) {
     console.warn("cannot show subtitles on this page:", e.message); // e.g. chrome:// or the Web Store
   }
+  return host || "";
 }
 
+// ---------- remembered sites + auto-start ----------
+const getSites = async () => (await chrome.storage.local.get("sites")).sites || {};
+const saveSites = (sites) => chrome.storage.local.set({ sites });
+const snoozed = new Map(); // tabId -> until (ms): "Not now" on the auto-start prompt
+
+async function shortcutText() {
+  const c = (await chrome.commands.getAll()).find((x) => x.name === "toggle-capture");
+  return (c && c.shortcut) || "";
+}
+
+// Chrome only lets an extension capture a tab after the user invokes it (icon click or shortcut),
+// so "auto-start" = when a listed site starts playing sound, offer one-key start on the page.
+chrome.tabs.onUpdated.addListener(async (tabId, info) => {
+  if (info.audible !== true) return;
+  if ((snoozed.get(tabId) || 0) > Date.now()) return;
+  const cur = await state();
+  if (cur && cur.tabId === tabId) return; // already running here
+  const sites = await getSites();
+  if (!Object.values(sites).some((s) => s.auto)) return; // nothing on the auto-start list: stay out of the way
+  const host = await ensureContent(tabId); // also works for tabs opened before the extension was reloaded
+  if (!host) return;
+  const rule = autoRuleFor(host, sites);
+  if (!rule) return;
+  snoozed.set(tabId, Date.now() + 60_000); // at most one prompt per minute per tab
+  chrome.tabs.sendMessage(tabId, { type: "autostart-prompt", host, rule, shortcut: await shortcutText(), busy: !!cur }).catch(() => {});
+});
+chrome.tabs.onRemoved.addListener((tabId) => snoozed.delete(tabId));
+
 async function showOverlay(tabId) {
-  await ensureContent(tabId);
+  const host = await ensureContent(tabId);
   const { conn } = await chrome.storage.session.get("conn");
   chrome.tabs.sendMessage(tabId, { type: "overlay-show", settings: await getSettings(), conn: !!conn }).catch(() => {});
+  return host;
 }
 
 // ---------- capture ----------
@@ -169,7 +201,8 @@ async function start(tabId, streamId) {
   await ensureOffscreen();
   await chrome.storage.session.set({ capture: { tabId }, conn: false });
   await toOffscreen({ type: "start", streamId, tabId, settings }, 5000);
-  await showOverlay(tabId);
+  const host = await showOverlay(tabId);
+  if (host) saveSites(recordUse(await getSites(), host)); // remember sites where subtitles were used
   chrome.action.setBadgeText({ text: "ON", tabId });
   chrome.action.setBadgeBackgroundColor({ color: "#d33" });
   if (settings.saveMode === "auto") await beginSaving(tabId);
@@ -233,6 +266,17 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         break;
       }
       case "ended": await stop(); break;
+      case "sites-get": return reply({ sites: sortedSites(await getSites()), shortcut: await shortcutText() });
+      case "site-auto": await saveSites(setAuto(await getSites(), msg.pattern, msg.auto)); break;
+      case "site-forget": await saveSites(forget(await getSites(), msg.pattern)); break;
+      case "page-host": { // popup fallback: which site is the active tab on? (injects the page script if missing)
+        const host = await ensureContent(msg.tabId);
+        return reply({ host: host || "", pattern: host ? normPattern(host) : "" });
+      }
+      case "prompt-snooze": if (sender.tab) snoozed.set(sender.tab.id, Date.now() + 10 * 60_000); break;
+      case "prompt-never": // "Don't ask on this site"
+        if (msg.pattern) await saveSites(setAuto(await getSites(), msg.pattern, false));
+        break;
     }
     reply(true);
    } catch (e) {
