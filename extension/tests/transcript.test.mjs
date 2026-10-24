@@ -24,8 +24,8 @@ test("clock and srtTime", () => {
 });
 
 test("file name is safe and dated", () => {
-  assert.equal(fileName(t, "srt"), "ru-en-subtitles/meet.google.com_2026-10-24_18-05.srt");
-  assert.equal(fileName({ ...t, site: "a/b:c?" }, "md"), "ru-en-subtitles/a_b_c__2026-10-24_18-05.md");
+  assert.equal(fileName(t, "srt"), "live-class-subtitles/meet.google.com_2026-10-24_18-05.srt");
+  assert.equal(fileName({ ...t, site: "a/b:c?" }, "md"), "live-class-subtitles/a_b_c__2026-10-24_18-05.md");
 });
 
 test("markdown has both languages and marks English speech", () => {

@@ -131,7 +131,7 @@ const finishSaving = () => serial(async () => {
       const filename = fileName(rec, "md").replace(/\.md$/, "." + (audio.ext || rec.audioFormat || "mp3"));
       const saved = await downloadBlob(audio.url, filename);
       rec.audioFile = saved;
-      files.push("ru-en-subtitles/" + saved);
+      files.push("live-class-subtitles/" + saved);
     }
   }
 
@@ -144,7 +144,7 @@ const finishSaving = () => serial(async () => {
     const text = render(rec, format);
     // long classes: a blob: URL from the offscreen document (data: URLs hit Chrome's ~2 MB URL limit)
     const blob = await toOffscreen({ type: "make-blob", text, mime: FORMATS[format].mime }, 5000);
-    if (blob && blob.url) files.push("ru-en-subtitles/" + (await downloadBlob(blob.url, filename)));
+    if (blob && blob.url) files.push("live-class-subtitles/" + (await downloadBlob(blob.url, filename)));
     else {
       await chrome.downloads.download({ url: dataUrl(text, FORMATS[format].mime), filename, conflictAction: "uniquify", saveAs: false });
       files.push(filename);

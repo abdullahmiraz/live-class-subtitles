@@ -201,7 +201,7 @@ async function refreshVocab() {
 $("ankiBtn").onclick = async () => {
   const { vocab = [] } = await chrome.storage.local.get("vocab");
   const url = dataUrl(toAnki(vocab), "text/plain"); // a blob: URL could die with the popup before the download starts
-  await chrome.downloads.download({ url, filename: `ru-en-subtitles/vocabulary_${new Date().toISOString().slice(0, 10)}.txt`, conflictAction: "uniquify" });
+  await chrome.downloads.download({ url, filename: `live-class-subtitles/vocabulary_${new Date().toISOString().slice(0, 10)}.txt`, conflictAction: "uniquify" });
   $("vocabInfo").textContent += " · exported ✓ (Anki: File → Import)";
 };
 $("vocabClear").onclick = async () => {

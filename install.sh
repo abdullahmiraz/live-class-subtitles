@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# One-line installer for the RU→EN Live Subtitles companion server (Linux):
-#   curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/ru-en-live-subtitles/main/install.sh | bash
-# Installs into ~/.local/share/ru-en-live-subtitles (override with RU_EN_HOME=…), downloads the speech
+# One-line installer for the Live Class Subtitles companion server (Linux):
+#   curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash
+# Installs into ~/.local/share/live-class-subtitles (override with RU_EN_HOME=…), downloads the speech
 # models (~350 MB, once) and starts the server automatically at login (systemd --user).
-# Run it again to update. Uninstall: ~/.local/share/ru-en-live-subtitles/install-autostart.sh remove
+# Run it again to update. Uninstall: ~/.local/share/live-class-subtitles/install-autostart.sh remove
 set -euo pipefail
-REPO=https://github.com/abdullahmiraz/ru-en-live-subtitles.git
-DIR="${RU_EN_HOME:-$HOME/.local/share/ru-en-live-subtitles}"
+REPO=https://github.com/abdullahmiraz/live-class-subtitles.git
+DIR="${RU_EN_HOME:-$HOME/.local/share/live-class-subtitles}"
 
 need() { command -v "$1" >/dev/null || { echo "Please install $1 first (e.g. sudo apt install $2)." >&2; exit 1; }; }
 need git git
@@ -25,8 +25,8 @@ fi
 "$DIR/start.sh" setup
 
 if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
-  if systemctl --user is-active --quiet ru-en-subtitles; then
-    systemctl --user restart ru-en-subtitles
+  if systemctl --user is-active --quiet live-class-subtitles; then
+    systemctl --user restart live-class-subtitles
   else
     "$DIR/install-autostart.sh"
   fi

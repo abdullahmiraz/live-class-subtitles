@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the local RU->EN subtitle server (speech recognition runs on this PC).
+# Start the local Live Class Subtitles server (speech recognition runs on this PC).
 # First run creates the Python environment and downloads the models (~350 MB).
 set -euo pipefail
 cd "$(dirname "$0")/server"
@@ -9,8 +9,8 @@ port_busy() { ss -ltn 2>/dev/null | grep -q '127.0.0.1:8765 '; }
 # ./start.sh restart  -> stop the running server (e.g. after an update) and start the new code
 if [ "${1:-}" = "restart" ] || [ "${1:-}" = "stop" ]; then
   # autostart service installed? let systemd do it, so it doesn't fight a second copy
-  if systemctl --user is-active --quiet ru-en-subtitles 2>/dev/null; then
-    systemctl --user "$1" ru-en-subtitles && echo "Autostart service: $1 done (logs: journalctl --user -u ru-en-subtitles -f)"
+  if systemctl --user is-active --quiet live-class-subtitles 2>/dev/null; then
+    systemctl --user "$1" live-class-subtitles && echo "Autostart service: $1 done (logs: journalctl --user -u live-class-subtitles -f)"
     exit 0
   fi
   pkill -f '^\.venv/bin/python server\.py' || true

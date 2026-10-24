@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width" />
-<title>RU→EN Live Subtitles · Setup</title>
+<title>Live Class Subtitles · Setup</title>
 <style>
   body { font: 15px/1.55 system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 20px; color: #222; }
   h1 { font-size: 24px; margin-bottom: 4px; }
@@ -17,18 +17,18 @@
   kbd { background: #eee; border: 1px solid #ccc; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 13px; }
   a { color: #1a73e8; }
 </style>
-<h1>RU → EN Live Subtitles</h1>
-<p class="lead">Live English subtitles for Russian audio in any tab. Free, no account, and the speech recognition runs on your
+<h1>Live Class Subtitles</h1>
+<p class="lead">Live subtitles for Russian audio in any tab, in English or 37 other languages. Free, no account, and the speech recognition runs on your
   own computer.</p>
 
 <h2><span class="n">1</span>Install the companion (once)</h2>
 <p>Chrome can't run speech recognition by itself, so a small free server runs on your PC. On Linux, paste this into a
   terminal:</p>
-<pre id="cmd">curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/ru-en-live-subtitles/main/install.sh | bash</pre>
+<pre id="cmd">curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash</pre>
 <button id="copy">Copy</button>
 <p class="hint">It downloads the speech models once (~350 MB) and starts by itself at login. It uses ~40 MB of memory
   while idle; the models load only while subtitles are on. Manual setup and source:
-  <a href="https://github.com/abdullahmiraz/ru-en-live-subtitles#readme" target="_blank">GitHub</a>.</p>
+  <a href="https://github.com/abdullahmiraz/live-class-subtitles#readme" target="_blank">GitHub</a>.</p>
 <p>Companion status: <span id="status">checking…</span></p>
 
 <h2><span class="n">2</span>Start subtitles</h2>
@@ -41,9 +41,9 @@
 
 <h2>Privacy</h2>
 <p class="hint">Audio never leaves your computer: it goes only to the companion on your PC. Only the recognized text
-  is sent to a free translator (Yandex or Google) to get the English. No accounts, no analytics.
-  <a href="https://github.com/abdullahmiraz/ru-en-live-subtitles/blob/main/PRIVACY.md" target="_blank">Privacy policy</a></p>
+  is sent to a free translator (Yandex or Google) to get the translation. No accounts, no analytics.
+  <a href="https://github.com/abdullahmiraz/live-class-subtitles/blob/main/PRIVACY.md" target="_blank">Privacy policy</a></p>
 <h2>Help</h2>
-<p class="hint">Something not working, or an idea? <a href="https://github.com/abdullahmiraz/ru-en-live-subtitles/issues" target="_blank">Open an issue on GitHub</a>, or message
+<p class="hint">Something not working, or an idea? <a href="https://github.com/abdullahmiraz/live-class-subtitles/issues" target="_blank">Open an issue on GitHub</a>, or message
   me on <a href="https://www.linkedin.com/in/abdullahmiraz/" target="_blank">LinkedIn</a>.</p>
 <script src="welcome.js" type="module"></script>

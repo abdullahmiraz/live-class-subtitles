@@ -1,6 +1,6 @@
-# RU → EN Live Subtitles (free, permanent)
+# Live Class Subtitles (free, permanent)
 
-[![CI](https://github.com/abdullahmiraz/ru-en-live-subtitles/actions/workflows/ci.yml/badge.svg)](https://github.com/abdullahmiraz/ru-en-live-subtitles/actions/workflows/ci.yml)
+[![CI](https://github.com/abdullahmiraz/live-class-subtitles/actions/workflows/ci.yml/badge.svg)](https://github.com/abdullahmiraz/live-class-subtitles/actions/workflows/ci.yml)
 
 Live subtitles for any Chrome tab playing Russian speech (online classes, YouTube, Meet, Zoom web…), in **English or 37 other languages** (Spanish, German, Arabic, Hindi, Bengali, Chinese, Turkish, Kazakh…). No accounts, no API keys, no paid services.
 
@@ -10,7 +10,7 @@ Live subtitles for any Chrome tab playing Russian speech (online classes, YouTub
 - **Translation**: online only, through the free Yandex / Google web endpoints (no account, no key, no CPU). Default order: **Yandex classic → Google → Yandex LLM** (Yandex classic reads best in real classes; benchmark scores below). If one fails, the next takes over automatically.
 - **Subtitle language**: popup → Basic → *Translate to* (38 languages). **Auto** uses Yandex classic first for English and Google first for other languages: in a spot check, Google was clearly better outside English. Word colors (learning) work for 19 languages, the ones where Yandex returns word matches: most European and Central Asian languages, plus Hebrew. Word-card meanings and read-aloud use the subtitle language too.
 - **English sentences**: if the speaker switches to English, that sentence is written down as said (Whisper-tiny) instead of being mistranslated. You can hide those sentences with a popup switch. Russian sentences with a few English words are always kept.
-- **Record a class**: keep the **transcript (EN + RU)**, the **audio**, or both, only if you choose it. Modes are **Off** (default), **Manual** (Start recording / Stop & save) and **Auto** (every session). Transcripts come as Markdown, SRT subtitles, plain text or JSON. Audio is the tab's sound as **MP3** (default, plays on any device, ~22 MB/hour) or Opus `.webm` (smallest, ~15 MB/hour). An `.srt` and the audio file from the same session play together in VLC/mpv. Files go to `Downloads/ru-en-subtitles/`.
+- **Record a class**: keep the **transcript (EN + RU)**, the **audio**, or both, only if you choose it. Modes are **Off** (default), **Manual** (Start recording / Stop & save) and **Auto** (every session). Transcripts come as Markdown, SRT subtitles, plain text or JSON. Audio is the tab's sound as **MP3** (default, plays on any device, ~22 MB/hour) or Opus `.webm` (smallest, ~15 MB/hour). An `.srt` and the audio file from the same session play together in VLC/mpv. Files go to `Downloads/live-class-subtitles/`.
 - **Learning mode**: each Russian word and its English translation get the **same color**, and hovering a word highlights its pair. It uses Yandex's word alignment, so you learn as you read instead of only translating.
 - **Learning tools (Extra tab)**:
   - **Word card**: hover any Russian word to see its dictionary form, grammar and meaning, e.g. *дубе → дуб, noun · masculine · prepositional · "oak"*, with **★ Save** and **✓ I know it**.
@@ -27,18 +27,18 @@ Live subtitles for any Chrome tab playing Russian speech (online classes, YouTub
 
 Requirements: Linux (tested on Ubuntu with PipeWire), Google Chrome 116+ (tested on 138+), Python 3.10+, `git`, `curl`. [`uv`](https://github.com/astral-sh/uv) is used if installed.
 
-**Quick install** of the companion server (installs into `~/.local/share/ru-en-live-subtitles`, downloads the models once and starts it at every login; run it again to update):
+**Quick install** of the companion server (installs into `~/.local/share/live-class-subtitles`, downloads the models once and starts it at every login; run it again to update):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/ru-en-live-subtitles/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash
 ```
-Then load the extension (step 2; the folder is `~/.local/share/ru-en-live-subtitles/extension`). After the extension is first installed, its setup page shows the same command and turns green when the server is reachable.
+Then load the extension (step 2; the folder is `~/.local/share/live-class-subtitles/extension`). After the extension is first installed, its setup page shows the same command and turns green when the server is reachable.
 
 **Manual install:**
 
 1. Get the code and start the server (first run downloads ~350 MB of models; keep the terminal open):
    ```bash
-   git clone https://github.com/abdullahmiraz/ru-en-live-subtitles.git
-   cd ru-en-live-subtitles
+   git clone https://github.com/abdullahmiraz/live-class-subtitles.git
+   cd live-class-subtitles
    ./start.sh
    ```
 2. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick the `extension/` folder (once; after code updates click the reload ↻ icon).
@@ -61,7 +61,7 @@ When nobody is using it, it takes ~40 MB of RAM and 0% CPU. The speech models lo
 
 ## Layout
 ```
-ru-en-live-subtitles/
+live-class-subtitles/
 ├── start.sh                    start the server (sets itself up on first run)
 ├── install-autostart.sh        optional autostart (systemd user service)
 ├── install.sh                  one-line installer: clone/update + setup + autostart
@@ -153,7 +153,7 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
     - **Store and install:** one-line installer, a setup page on first install, new icons, a privacy policy, listing text, and screenshots generated by headless Chrome.
 
 21. **Any major subtitle language + final bug sweep.**
-    - 38 target languages were checked against all three translators. Speech stays Russian; any spoken language is planned in [#7](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues/7).
+    - 38 target languages were checked against all three translators. Speech stays Russian; any spoken language is planned in [#7](https://github.com/abdullahmiraz/live-class-subtitles/issues/7).
     - English speech is translated into the chosen language, with the original kept.
     - The popup got ⓘ explanations and a "Coming soon" list.
     - New headless end-to-end test: Chrome's fake microphone → offscreen → server → overlay → saved files (`extension/tests/e2e_headless.py`).
@@ -166,19 +166,21 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
       - Setup hints said "run start.sh" to store users.
       - The ON badge was lost after a page reload.
 
+22. **New name: Live Class Subtitles** (before the first store upload). "RU→EN" no longer fit once subtitles came in 38 languages. The store title is "Live Class Subtitles – Russian to 38 Languages". Files now go to `Downloads/live-class-subtitles/`. The repository is now `live-class-subtitles` (old links redirect), and so is the autostart service; `install-autostart.sh` removes the old one.
+
 ## Roadmap
-Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues?q=label%3Anext-stage)):
+Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/live-class-subtitles/issues?q=label%3Anext-stage)):
 - ~~Save translations (both languages) to a file~~ ✅ done (v1.1)
 - ~~Record the class audio~~ ✅ done (v1.2)
 - ~~Learning tools (#4) and borrowed ideas (#5)~~ ✅ done (v1.5)
 - ~~Auto-start on listed websites + remember used sites~~ ✅ done (v1.4, one-key start because Chrome requires a gesture)
 - ~~Chrome Web Store package, lighter idle server, per-site access~~ ✅ done (v1.6)
-- Lite version for low-RAM PCs ([#6](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues/6)) and a Pro version with more languages ([#7](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues/7)), both free
+- Lite version for low-RAM PCs ([#6](https://github.com/abdullahmiraz/live-class-subtitles/issues/6)) and a Pro version with more languages ([#7](https://github.com/abdullahmiraz/live-class-subtitles/issues/7)), both free
 
 ## License
 Copyright © 2026 Abdullah Miraz. **Source-available, not open source.** Licensed under the [PolyForm Strict License 1.0.0](LICENSE):
 - ✅ Personal, non-commercial use: study, hobby, your own classes. Use by schools and non-profits is also allowed by the license.
-- ❌ No redistribution, no publishing modified versions, no building other products or services on it, no commercial use, unless you have written permission. [Open an issue](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues) or [message me on LinkedIn](https://www.linkedin.com/in/abdullahmiraz/) to ask.
+- ❌ No redistribution, no publishing modified versions, no building other products or services on it, no commercial use, unless you have written permission. [Open an issue](https://github.com/abdullahmiraz/live-class-subtitles/issues) or [message me on LinkedIn](https://www.linkedin.com/in/abdullahmiraz/) to ask.
 - Breaking the terms ends your license (after a 32-day chance to fix it after written notice). After that, any further use is copyright infringement.
 
 Versions published before 2026-10-24 19:30 were MIT-licensed. Those copies keep MIT; everything from this commit on is PolyForm Strict.
@@ -194,13 +196,13 @@ Benchmarks use [Google FLEURS](https://huggingface.co/datasets/google/fleurs) (C
 MP3 encoding uses [lamejs](https://github.com/zhuker/lamejs) (LGPL-3.0, bundled unmodified in `extension/vendor/`).
 
 ## Contact
-Bugs, ideas and questions: [GitHub issues](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues). Permission requests or anything private: [LinkedIn](https://www.linkedin.com/in/abdullahmiraz/). More about me: [miraz.dev](https://www.miraz.dev/about).
+Bugs, ideas and questions: [GitHub issues](https://github.com/abdullahmiraz/live-class-subtitles/issues). Permission requests or anything private: [LinkedIn](https://www.linkedin.com/in/abdullahmiraz/). More about me: [miraz.dev](https://www.miraz.dev/about).
 
 ## Privacy
 Audio only goes to the server on your own PC; only the recognized text goes to the translator. No accounts, analytics or tracking. Details: [PRIVACY.md](PRIVACY.md).
 
 ## Publishing to the Chrome Web Store (maintainer)
-1. Bump `version` in `extension/manifest.json`. Run `./package.sh`. It runs the checks and writes `dist/ru-en-live-subtitles-<version>.zip`.
+1. Bump `version` in `extension/manifest.json`. Run `./package.sh`. It runs the checks and writes `dist/live-class-subtitles-<version>.zip`.
 2. If the UI changed, refresh the screenshots:
    - Start a current server: `./start.sh`, or on a spare port: `cd server && .venv/bin/python server.py --port 8799`.
    - Then run `uv run --no-project --with websockets --with pillow python store/screenshots.py store/subs.json ws://127.0.0.1:8799 && uv run --no-project --with pillow python store/compose.py`. Everything runs headless.

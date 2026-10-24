@@ -286,7 +286,7 @@ async def handler(ws):
     origin = ws.request.headers.get("Origin") if ws.request else None
     if origin and not origin.startswith("chrome-extension://"):
         print(f"refused a connection from {origin[:60]}", flush=True)
-        await ws.close(1008, "only the RU→EN Live Subtitles extension may connect")
+        await ws.close(1008, "only the Live Class Subtitles extension may connect")
         return
     url = urllib.parse.urlparse(ws.request.path if ws.request else "/")
     label = (url.path.strip("/") or "tab").replace("/", "_")[:40]

@@ -1,11 +1,11 @@
 # Chrome Web Store listing (copy-paste source)
 
-Upload: `./package.sh` → `dist/ru-en-live-subtitles-<version>.zip` →
+Upload: `./package.sh` → `dist/live-class-subtitles-<version>.zip` →
 [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → **Add new item** (first time) or the item → **Package → Upload new package**.
 
 ## Store listing tab
 
-**Name** (from manifest): RU→EN Live Subtitles
+**Name** (from manifest, max 75 chars): Live Class Subtitles – Russian to 38 Languages
 
 **Summary** (manifest `description`, max 132 chars):
 > Live subtitles for Russian audio in any tab: English or 37 other languages. Speech recognition runs on your own PC.
@@ -37,9 +37,9 @@ LEARN RUSSIAN WHILE YOU LISTEN
 SETUP (once, Linux)
 After installing, a setup page shows a one-line command that installs the companion server. It starts by itself at login and uses ~40 MB of memory while idle.
 
-Requires: Linux desktop with Chrome 116+. Source, help and issues: https://github.com/abdullahmiraz/ru-en-live-subtitles
+Requires: Linux desktop with Chrome 116+. Source, help and issues: https://github.com/abdullahmiraz/live-class-subtitles
 Made by Abdullah Miraz: https://www.miraz.dev/about
-Questions or ideas: https://github.com/abdullahmiraz/ru-en-live-subtitles/issues (or LinkedIn: https://www.linkedin.com/in/abdullahmiraz/)
+Questions or ideas: https://github.com/abdullahmiraz/live-class-subtitles/issues (or LinkedIn: https://www.linkedin.com/in/abdullahmiraz/)
 ```
 
 **Graphics** (in `store/`):
@@ -47,8 +47,8 @@ Questions or ideas: https://github.com/abdullahmiraz/ru-en-live-subtitles/issues
 - Screenshots 1280×800: `store/screenshot-*.png`
 - Small promo tile 440×280: `store/promo-small.png`
 
-**Homepage URL:** https://github.com/abdullahmiraz/ru-en-live-subtitles
-**Support URL:** https://github.com/abdullahmiraz/ru-en-live-subtitles/issues
+**Homepage URL:** https://github.com/abdullahmiraz/live-class-subtitles
+**Support URL:** https://github.com/abdullahmiraz/live-class-subtitles/issues
 
 ## Privacy tab
 
@@ -76,7 +76,7 @@ Questions or ideas: https://github.com/abdullahmiraz/ru-en-live-subtitles/issues
   - not used for purposes unrelated to the single purpose
   - not used for creditworthiness or lending
 
-**Privacy policy URL:** https://github.com/abdullahmiraz/ru-en-live-subtitles/blob/main/PRIVACY.md
+**Privacy policy URL:** https://github.com/abdullahmiraz/live-class-subtitles/blob/main/PRIVACY.md
 
 ## Distribution tab
 - Visibility: **Public**, or **Unlisted** for a first soft launch (only people with the link can install it).
@@ -85,7 +85,7 @@ Questions or ideas: https://github.com/abdullahmiraz/ru-en-live-subtitles/issues
 ## Notes for reviewers (Test instructions field)
 ```
 The extension needs its free companion server on the same computer (it does the speech recognition locally).
-Install on Linux: curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/ru-en-live-subtitles/main/install.sh | bash
+Install on Linux: curl -fsSL https://raw.githubusercontent.com/abdullahmiraz/live-class-subtitles/main/install.sh | bash
 Then open a tab with Russian speech (e.g. any Russian YouTube lecture), click the extension icon → Start.
 Without the server the popup shows "Local server: not running · set it up".
 ```

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build the Chrome Web Store upload: dist/ru-en-live-subtitles-<version>.zip (extension only, no tests).
+# Build the Chrome Web Store upload: dist/live-class-subtitles-<version>.zip (extension only, no tests).
 set -euo pipefail
 cd "$(dirname "$0")"
 VER=$(python3 -c 'import json; print(json.load(open("extension/manifest.json"))["version"])')
-OUT="dist/ru-en-live-subtitles-$VER.zip"
+OUT="dist/live-class-subtitles-$VER.zip"
 node --check extension/*.js
 node --test extension/tests/*.test.mjs >/dev/null
 mkdir -p dist

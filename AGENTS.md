@@ -1,5 +1,10 @@
 # AGENTS.md: guide for AI coding agents (and humans)
 
+**Product name: Live Class Subtitles** (store title "Live Class Subtitles – Russian to 38 Languages"). Repo
+`abdullahmiraz/live-class-subtitles` (renamed from ru-en-live-subtitles; GitHub redirects old links), systemd unit
+`live-class-subtitles` (install-autostart.sh removes the old `ru-en-subtitles` unit), install dir
+`~/.local/share/live-class-subtitles`.
+
 Live Russian → English (or 37 other languages) subtitles for any Chrome tab. A Chrome MV3 extension captures tab audio and streams it to a **local Python server**. The server transcribes the Russian on the CPU and translates it through free online endpoints.
 
 ## Hard constraints (the owner's requirements, do not violate)
@@ -14,7 +19,7 @@ Live Russian → English (or 37 other languages) subtitles for any Chrome tab. A
 ```
 start.sh                     one-command start (creates venv + downloads models on first run)
 install-autostart.sh         optional systemd --user service
-install.sh                   one-line installer (curl | bash): clone/update into ~/.local/share/ru-en-live-subtitles,
+install.sh                   one-line installer (curl | bash): clone/update into ~/.local/share/live-class-subtitles,
                              start.sh setup, autostart
 package.sh                   Chrome Web Store zip → dist/ (no tests, no .md)
 PRIVACY.md                   privacy policy (store listing links it)

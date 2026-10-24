@@ -779,8 +779,8 @@
     </style>
     <div class="toast">
       <span>🎧</span>
-      <span><b>RU→EN subtitles</b> for <span class="h"></span>?<br>
-        <span class="muted">${key ? `Press <kbd>${key.replace(/\+/g, "</kbd>+<kbd>")}</kbd> or click` : "Click"} the RU→EN icon${m.busy ? " (moves subtitles to this tab)" : ""}</span></span>
+      <span><b>Live subtitles</b> for <span class="h"></span>?<br>
+        <span class="muted">${key ? `Press <kbd>${key.replace(/\+/g, "</kbd>+<kbd>")}</kbd> or click` : "Click"} the Live Class Subtitles icon${m.busy ? " (moves subtitles to this tab)" : ""}</span></span>
       <button class="later" title="Hide for 10 minutes">Not now</button>
       <button class="never" title="Turn off auto-start for this site">Don't ask here</button>
     </div>`;

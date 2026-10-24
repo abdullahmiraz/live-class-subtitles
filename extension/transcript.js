@@ -30,10 +30,10 @@ export function stamp(epochMs) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 
-/** Downloads-relative path, e.g. "ru-en-subtitles/meet.google.com_2026-10-24_18-05.md". */
+/** Downloads-relative path, e.g. "live-class-subtitles/meet.google.com_2026-10-24_18-05.md". */
 export function fileName(t, format) {
   const site = (t.site || "tab").replace(/[^a-z0-9.-]+/gi, "_").slice(0, 60);
-  return `ru-en-subtitles/${site}_${stamp(t.startedAt)}.${FORMATS[format].ext}`;
+  return `live-class-subtitles/${site}_${stamp(t.startedAt)}.${FORMATS[format].ext}`;
 }
 
 // spoken in English: with a non-English subtitle language the original English is kept in `ru`
