@@ -14,7 +14,7 @@ function connect() {
   };
   ws.onmessage = (e) => {
     const d = JSON.parse(e.data);
-    if (d.type === "partial") send({ type: "sub", kind: "partial", ru: d.ru, en: d.en });
+    if (d.type === "partial") send({ type: "sub", kind: "partial", ru: d.ru, en: d.en, align: d.align });
     else if (d.type === "final")
       send({
         type: "sub", kind: "final", ru: d.ru, en: d.en, lang: d.lang, engine: d.engine, align: d.align,

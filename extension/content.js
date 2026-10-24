@@ -41,8 +41,9 @@
     .btn { all: unset; cursor: pointer; padding: 2px 7px; border-radius: 6px; color: #ddd; font-size: 12px; line-height: 18px; }
     .btn { transition: background .15s, color .15s; }
     .btn:hover { background: rgba(255,255,255,.14); color: #fff; }
-    .hist { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 2px; scroll-behavior: smooth; overscroll-behavior: contain;
+    .hist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 4px 12px 2px; scroll-behavior: smooth; overscroll-behavior: contain;
       scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+    .hist > :first-child { margin-top: auto; } /* anchor to the bottom; still scrolls normally */
     .empty { color: #888; font-size: .7em; padding: 10px 0; text-align: center; }
     .item { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; padding: 6px 0 6px 10px;
       border-bottom: 1px solid rgba(255,255,255,.06); opacity: .58; border-left: 3px solid transparent; margin-left: -10px;
@@ -320,10 +321,13 @@
     if (i < text.length) el.append(text.slice(i));
   }
 
-  function setLive(en, ru) {
+  function setLive(en, ru, align) {
     liveWrap.classList.toggle("idle", !en && !ru);
-    liveEn.textContent = en || (ru ? "…" : "listening…");
-    liveRu.textContent = ru || "";
+    if (en && ru && align && align.length) colorize(liveEn, liveRu, { en, ru, align });
+    else {
+      liveEn.textContent = en || (ru ? "…" : "listening…");
+      liveRu.textContent = ru || "";
+    }
   }
 
   // ---------- messages from the extension ----------
@@ -365,7 +369,7 @@
       build();
       if (!live && m.kind !== "error") { live = true; showStatus(); } // text is arriving, so we're connected
       if (m.kind === "final") addFinal(m);
-      else if (m.kind === "partial") setLive(m.en, m.ru);
+      else if (m.kind === "partial") setLive(m.en, m.ru, m.align);
       else if (m.kind === "error") { statusEl.textContent = m.en; statusEl.style.color = "#ff8f8f"; }
     }
   });

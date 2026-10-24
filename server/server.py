@@ -52,6 +52,7 @@ class Session:
         self.last_partial = 0.0
         self.last_partial_ru = ""
         self.partial_en = ""
+        self.partial_align, self.partial_src = [], ""
         self.last_partial_tr = 0.0
         self.partial_task = None
         self.gen = 0  # bumps when a sentence ends, so late partial translations are dropped
@@ -96,7 +97,11 @@ class Session:
                 now = time.monotonic()
                 if text and text != self.last_partial_ru and now - self.last_partial > PARTIAL_EVERY:
                     self.last_partial, self.last_partial_ru = now, text
-                    await self.send(type="partial", ru=text, en=self.partial_en)
+                    if self.partial_en:  # show the newest Russian with the last translation (+ its colors)
+                        await self.send(type="partial", ru=text, en=self.partial_en,
+                                        align=self.partial_align if text.startswith(self.partial_src) else [])
+                    else:
+                        await self.send(type="partial", ru=text, en="")
                     idle = self.partial_task is None or self.partial_task.done()
                     if idle and now - self.last_partial_tr > PARTIAL_TRANSLATE_EVERY:
                         self.last_partial_tr = now
@@ -106,10 +111,18 @@ class Session:
             self.drain_vad()
 
     async def translate_partial(self, text, gen):
-        en, _ = await asyncio.get_running_loop().run_in_executor(pool, translate_chain, self.chain, text)
+        loop = asyncio.get_running_loop()
+        en, align = "", []
+        if self.learn:  # learning mode: color the live line too (word alignment from Yandex)
+            try:
+                en, align = await loop.run_in_executor(pool, yandex_aligned, text)
+            except Exception:
+                pass
+        if not en:
+            en, _ = await loop.run_in_executor(pool, translate_chain, self.chain, text)
         if gen == self.gen and en:
-            self.partial_en = en
-            await self.send(type="partial", ru=self.last_partial_ru, en=en)
+            self.partial_en, self.partial_align, self.partial_src = en, align, text
+            await self.send(type="partial", ru=text, en=en, align=align)
 
     def drain_vad(self):
         while not self.vad.empty():
