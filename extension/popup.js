@@ -43,7 +43,6 @@ async function refresh() {
 
 async function refreshSave(capturingHere) {
   const s = await bg({ type: "save-status" });
-  $("advDot").classList.toggle("on", !!s.active);
   const btn = $("saveBtn");
   btn.style.display = settings.saveMode === "manual" ? "" : "none";
   const nothing = !settings.saveTranscript && !settings.saveAudio;

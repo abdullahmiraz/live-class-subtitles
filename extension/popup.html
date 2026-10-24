@@ -43,10 +43,10 @@
 
 <div class="tabs" role="tablist">
   <button class="tab active" data-tab="basic" role="tab">Basic</button>
-  <button class="tab" data-tab="advanced" role="tab" title="Translation, learning, recording, sites">Advanced<span class="dot" id="advDot" title="Recording is running"></span></button>
+  <button class="tab" data-tab="advanced" role="tab" title="Translator choice, site list">Advanced</button>
 </div>
 
-<!-- Basic: what you change every day -->
+<!-- Basic: everything used day to day -->
 <section class="pane active" id="pane-basic">
   <label>Display
     <select id="display">
@@ -57,26 +57,10 @@
   <label>Font size <input id="fontSize" type="number" min="12" max="48" /></label>
   <label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
   <label>Show Russian text <input id="showRu" type="checkbox" /></label>
-</section>
-
-<!-- Advanced: everything else, grouped -->
-<section class="pane" id="pane-advanced">
-  <fieldset>
-    <legend>Translation</legend>
-    <label>Translator
-      <select id="engine">
-        <option value="auto" title="Yandex classic → Google → Yandex LLM">Auto (best order)</option>
-        <option value="yandex-nmt">Yandex (classic)</option>
-        <option value="google">Google</option>
-        <option value="yandex">Yandex (LLM)</option>
-      </select>
-    </label>
-    <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
-  </fieldset>
-  <fieldset>
-    <legend>Learning</legend>
-    <label title="Each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex classic (it provides the word matching).">Color-match words <input id="learn" type="checkbox" /></label>
-  </fieldset>
+  <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
+  <label title="Learning mode: each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex classic (it provides the word matching).">Color-match words (learning) <input id="learn" type="checkbox" /></label>
+  <label title="When this site starts playing sound, offer one-key start (Chrome requires a click or the shortcut to capture a tab). Manage all sites in Advanced.">
+    <span>Auto-start on <b id="curHost">this site</b></span><input id="autoHere" type="checkbox" /></label>
   <fieldset>
     <legend>Record this class</legend>
     <label>Mode
@@ -104,10 +88,23 @@
     <div id="saveInfo"></div>
     <div class="hint">Files go to Downloads/ru-en-subtitles/ · <a id="openFolder">open folder</a></div>
   </fieldset>
+</section>
+
+<!-- Advanced: rarely changed settings + new features until they prove everyday -->
+<section class="pane" id="pane-advanced">
+  <fieldset>
+    <legend>Translation</legend>
+    <label>Translator
+      <select id="engine">
+        <option value="auto" title="Yandex classic → Google → Yandex LLM">Auto (best order)</option>
+        <option value="yandex-nmt">Yandex (classic)</option>
+        <option value="google">Google</option>
+        <option value="yandex">Yandex (LLM)</option>
+      </select>
+    </label>
+  </fieldset>
   <fieldset>
     <legend>Sites</legend>
-    <label title="When this site starts playing sound, offer one-key start (Chrome requires a click or the shortcut to capture a tab)">
-      <span>Auto-start on <b id="curHost">this site</b></span><input id="autoHere" type="checkbox" /></label>
     <div id="siteList"></div>
     <div class="addrow"><input id="addPattern" placeholder="add site, e.g. *.zoom.us" /><button id="addBtn">Add</button></div>
     <div class="hint">★ = auto-start · sites you've used are remembered</div>

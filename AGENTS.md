@@ -25,9 +25,10 @@ extension/                   Chrome MV3 extension (no build step, plain JS)
   sites.js                   pure site memory + auto-start rules (exact host or *.wildcard); tested by extension/tests
   transcript.js              pure transcript formatters (md/srt/txt/json) + data: URL; tested by extension/tests
   webm-duration.js           inserts the Duration Chrome's MediaRecorder leaves out of WebM; tested by extension/tests
-  popup.html / popup.js      start/stop + settings in two tabs. Basic = everyday look (display, fontSize, bgOpacity, showRu).
-                             Advanced = fieldsets Translation / Learning / Record this class / Sites. New features go into the
-                             matching fieldset, not Basic (see issue comments in #4 and #5 for placement). Settings (chrome.storage.sync): engine, fontSize, bgOpacity, showRu, hideEn,
+  popup.html / popup.js      start/stop + settings in two tabs. Basic = everything used day to day (owner wants it full):
+                             display, fontSize, bgOpacity, showRu, hideEn, learn, auto-start-here, Record this class.
+                             Advanced = rarely changed (translator, site list manager). New features start in Advanced and
+                             move to Basic once they're everyday. Settings (chrome.storage.sync): engine, fontSize, bgOpacity, showRu, hideEn,
                              learn, display (panel|subtitles), saveMode (off|manual|auto), saveFormat (md|srt|txt|json),
                              saveTranscript, saveAudio, audioFormat (mp3|webm)
 server/
