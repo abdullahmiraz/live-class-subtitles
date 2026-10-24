@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  body { font: 13px system-ui, sans-serif; width: 270px; margin: 12px; color: #222; }
+  h1 { font-size: 14px; margin: 0 0 10px; }
+  button { width: 100%; padding: 9px; font-size: 14px; font-weight: 600; border: 0; border-radius: 6px; cursor: pointer; background: #1a73e8; color: #fff; }
+  button.on { background: #d33; }
+  label { display: flex; justify-content: space-between; align-items: center; margin: 9px 0; gap: 8px; }
+  select, input[type=number] { width: 120px; }
+  .srv { font-size: 12px; margin-top: 10px; color: #666; }
+  .ok { color: #188038; } .bad { color: #c5221f; }
+  .hint { color: #888; font-size: 11px; margin-top: 8px; }
+</style>
+<h1>RU → EN Live Subtitles</h1>
+<button id="toggle">Start on this tab</button>
+<label>Translator
+  <select id="engine">
+    <option value="auto">Best available (Google → Yandex)</option>
+    <option value="google">Google</option>
+    <option value="yandex">Yandex (LLM)</option>
+    <option value="yandex-nmt">Yandex (classic)</option>
+  </select>
+</label>
+<label>Font size <input id="fontSize" type="number" min="12" max="60" /></label>
+<label>Lines shown <input id="lines" type="number" min="1" max="6" /></label>
+<label>Show Russian text <input id="showRu" type="checkbox" /></label>
+<label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
+<div class="srv">Local server: <span id="srv">checking…</span></div>
+<div class="hint">Shortcut: Alt+Shift+Y · Transcripts are saved in server/transcripts/</div>
+<script src="popup.js" type="module"></script>

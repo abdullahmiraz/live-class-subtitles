@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Downloaded models (fetched by server/download_models.sh)
+server/models/
+
+# Personal data: saved lecture transcripts and benchmark outputs
+server/transcripts/
+server/dev/bench_results/
+
+# Audio / scratch
+*.wav
+*.mp3
+*.zip
+*.tar.bz2
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Local agent settings (keep CLAUDE.md / AGENTS.md)
+.claude/settings.local.json

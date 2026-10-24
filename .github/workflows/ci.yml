@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r server/requirements.txt pytest
+      - run: python -m pytest -q server/tests
+      - run: python -m py_compile server/*.py server/dev/*.py
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax check
+        run: for f in extension/*.js; do node --check "$f"; done
+      - name: Manifest is valid JSON with required permissions
+        run: |
+          node -e '
+            const m = require("./extension/manifest.json");
+            for (const p of ["tabCapture", "offscreen", "storage"]) if (!m.permissions.includes(p)) throw new Error("missing " + p);
+            if (m.manifest_version !== 3) throw new Error("not MV3");
+            console.log("manifest ok:", m.name, m.version);'
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n start.sh && bash -n install-autostart.sh && bash -n server/download_models.sh

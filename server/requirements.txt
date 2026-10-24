@@ -1,0 +1,3 @@
+sherpa-onnx>=2.0
+websockets>=13
+numpy
