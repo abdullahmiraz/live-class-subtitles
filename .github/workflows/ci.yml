@@ -26,6 +26,8 @@ jobs:
           node-version: "22"
       - name: Syntax check
         run: for f in extension/*.js; do node --check "$f"; done
+      - name: Transcript formatter tests
+        run: node --test extension/tests/*.test.mjs
       - name: Manifest is valid JSON with required permissions
         run: |
           node -e '

@@ -9,7 +9,7 @@ import soundfile as sf
 import websockets
 
 
-async def main(path, url="ws://127.0.0.1:8765/test"):
+async def main(path, url=sys.argv[2] if len(sys.argv) > 2 else "ws://127.0.0.1:8765/test"):
     audio, sr = sf.read(path, dtype="int16")
     assert sr == 16000
     async with websockets.connect(url) as ws:

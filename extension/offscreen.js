@@ -1,17 +1,25 @@
 // Offscreen document: captures the tab, keeps it audible, streams 16 kHz PCM to the local server.
-let media, playCtx, capCtx, ws, settings, tabId, reconnectTimer, stopped = true;
+let media, playCtx, capCtx, ws, settings, tabId, reconnectTimer, wsOpenedAt = 0, stopped = true;
 
 const send = (m) => chrome.runtime.sendMessage({ target: "background", ...m }).catch(() => {});
 
 function connect() {
   clearTimeout(reconnectTimer);
-  const url = `${settings.server}/tab?engine=${encodeURIComponent(settings.engine)}&hide_en=${settings.hideEn ? 1 : 0}`;
+  const url = `${settings.server}/tab?engine=${encodeURIComponent(settings.engine)}&hide_en=${settings.hideEn ? 1 : 0}&learn=${settings.learn ? 1 : 0}`;
   ws = new WebSocket(url);
   ws.binaryType = "arraybuffer";
-  ws.onopen = () => send({ type: "conn", ok: true });
+  ws.onopen = () => {
+    wsOpenedAt = Date.now(); // server start/end = seconds of audio since this moment
+    send({ type: "conn", ok: true });
+  };
   ws.onmessage = (e) => {
     const d = JSON.parse(e.data);
-    if (d.type === "partial" || d.type === "final") send({ type: "sub", kind: d.type, ru: d.ru, en: d.en, lang: d.lang });
+    if (d.type === "partial") send({ type: "sub", kind: "partial", ru: d.ru, en: d.en });
+    else if (d.type === "final")
+      send({
+        type: "sub", kind: "final", ru: d.ru, en: d.en, lang: d.lang, engine: d.engine, align: d.align,
+        start: wsOpenedAt + d.start * 1000, end: wsOpenedAt + d.end * 1000,
+      });
   };
   ws.onclose = () => {
     if (stopped) return;
@@ -59,7 +67,7 @@ chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     start(msg.streamId).catch((e) => send({ type: "sub", kind: "error", ru: "", en: `Capture failed: ${e.message}` }));
   } else if (msg.type === "stop") stop();
   else if (msg.type === "settings") {
-    const engineChanged = settings && (msg.settings.engine !== settings.engine || msg.settings.hideEn !== settings.hideEn);
+    const engineChanged = settings && (msg.settings.engine !== settings.engine || msg.settings.hideEn !== settings.hideEn || msg.settings.learn !== settings.learn);
     settings = { ...settings, ...msg.settings };
     if (engineChanged && ws) ws.close(); // reconnects with the new engine / English setting
   }

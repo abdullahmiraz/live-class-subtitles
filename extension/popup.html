@@ -10,6 +10,13 @@
   .srv { font-size: 12px; margin-top: 10px; color: #666; }
   .ok { color: #188038; } .bad { color: #c5221f; }
   .hint { color: #888; font-size: 11px; margin-top: 8px; }
+  fieldset { border: 1px solid #ddd; border-radius: 6px; margin: 10px 0 0; padding: 4px 10px 10px; }
+  legend { font-weight: 600; padding: 0 4px; }
+  #saveBtn { background: #188038; margin-top: 2px; }
+  #saveBtn.on { background: #d33; }
+  #saveBtn:disabled { background: #bbb; cursor: default; }
+  #saveInfo { font-size: 12px; color: #555; margin-top: 6px; min-height: 1em; word-break: break-all; }
+  a { color: #1a73e8; cursor: pointer; }
 </style>
 <h1>RU → EN Live Subtitles</h1>
 <button id="toggle">Start on this tab</button>
@@ -22,9 +29,31 @@
   </select>
 </label>
 <label>Font size <input id="fontSize" type="number" min="12" max="60" /></label>
-<label>Lines shown <input id="lines" type="number" min="1" max="6" /></label>
+<label>Background <span><input id="bgOpacity" type="range" min="20" max="100" step="5" style="width:90px;vertical-align:middle" /> <span id="bgOpacityVal" style="display:inline-block;width:32px;text-align:right">88%</span></span></label>
 <label>Show Russian text <input id="showRu" type="checkbox" /></label>
 <label title="Russian sentences with some English words are always kept">Hide sentences spoken in English <input id="hideEn" type="checkbox" /></label>
+<label title="Each Russian word and its English translation get the same color. Hover a word to highlight its pair. Uses Yandex translation (it provides the word matching).">Learning mode: color-match words <input id="learn" type="checkbox" /></label>
+<fieldset>
+  <legend>Save transcript (EN + RU)</legend>
+  <label>Mode
+    <select id="saveMode">
+      <option value="off">Off</option>
+      <option value="manual">Manual (start / stop)</option>
+      <option value="auto">Auto (every session)</option>
+    </select>
+  </label>
+  <label>Format
+    <select id="saveFormat">
+      <option value="md">Markdown (.md)</option>
+      <option value="srt">Subtitles (.srt)</option>
+      <option value="txt">Plain text (.txt)</option>
+      <option value="json">JSON (.json)</option>
+    </select>
+  </label>
+  <button id="saveBtn">Start saving</button>
+  <div id="saveInfo"></div>
+  <div class="hint">Files go to Downloads/ru-en-subtitles/ · <a id="openFolder">open folder</a></div>
+</fieldset>
 <div class="srv">Local server: <span id="srv">checking…</span></div>
-<div class="hint">Shortcut: Alt+Shift+Y · Transcripts are saved in server/transcripts/</div>
+<div class="hint">Shortcut: Alt+Shift+Y</div>
 <script src="popup.js" type="module"></script>

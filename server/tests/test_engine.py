@@ -23,6 +23,9 @@ from engine import looks_english  # noqa: E402
     ("Ок", False),
     ("OK", False),
     ("", False),
+    # decoder glitches must not count as English
+    ("<unk><unk><unk><unk><unk><unk>", False),
+    ("<unk><unk>Привет, как дела<unk>", False),
 ])
 def test_looks_english(text, expected):
     assert looks_english(text) is expected

@@ -4,7 +4,7 @@ Clients (the Chrome extension, or dev/test_client.py) connect to ws://127.0.0.1:
 and stream 16 kHz mono Int16 PCM. The server answers with JSON messages:
   {"type": "partial", "ru": "...", "en": "..."}   rough live text while someone is speaking
   {"type": "final",   "ru": "...", "en": "...", "start": 12.3, "end": 15.8, "engine": "google"}
-Every session is also saved to transcripts/<date>_<label>.md.
+Nothing is written to disk unless started with --save-transcripts (saving is the extension's job, opt-in).
 
 Speech recognition is local (GigaAM-v3, light on CPU). Sentences spoken in English (detected by a
 free text check: GigaAM writes them in Latin letters) are written down with Whisper-tiny instead of
@@ -26,12 +26,13 @@ import numpy as np
 import websockets
 
 from engine import SAMPLE_RATE, EnglishASR, FinalASR, PartialASR, looks_english, make_vad
-from translate import translate_chain
+from translate import translate_chain, yandex_aligned
 
 VAD_WINDOW = 512  # samples, required by Silero VAD at 16 kHz
 PARTIAL_EVERY = 0.35  # seconds between partial updates
 MAX_GAIN = 8.0
 TRANSCRIPTS = Path(__file__).parent / "transcripts"
+SAVE_TRANSCRIPTS = False  # set by --save-transcripts; normal saving is done by the extension (user's choice)
 PARTIAL_TRANSLATE_EVERY = 1.5  # seconds between online translations of live text
 
 final_asr: FinalASR
@@ -39,8 +40,8 @@ english_asr: EnglishASR
 pool = ThreadPoolExecutor(max_workers=2)  # translation
 asr_pool = ThreadPoolExecutor(max_workers=1)  # all speech recognition runs on ONE thread (sherpa-onnx is not safe to mix across threads)
 class Session:
-    def __init__(self, ws, label, chain, hide_en=False):
-        self.ws, self.chain, self.hide_en = ws, chain, hide_en
+    def __init__(self, ws, label, chain, hide_en=False, learn=False):
+        self.ws, self.chain, self.hide_en, self.learn = ws, chain, hide_en, learn
         self.vad = make_vad()
         self.partial = PartialASR()
         self.buf = np.zeros(0, dtype=np.float32)
@@ -56,10 +57,17 @@ class Session:
         self.gen = 0  # bumps when a sentence ends, so late partial translations are dropped
         self.finals = asyncio.Queue()
         self.worker = asyncio.create_task(self.final_worker())
-        TRANSCRIPTS.mkdir(exist_ok=True)
-        now = datetime.now()
-        self.log = TRANSCRIPTS / f"{now:%Y-%m-%d_%H-%M}_{label}.md"
-        self.log.write_text(f"# Transcript {now:%Y-%m-%d %H:%M} ({label})\n\n", encoding="utf-8")
+        self.log = None
+        if SAVE_TRANSCRIPTS:  # off unless the server was started with --save-transcripts
+            TRANSCRIPTS.mkdir(exist_ok=True)
+            now = datetime.now()
+            self.log = TRANSCRIPTS / f"{now:%Y-%m-%d_%H-%M}_{label}.md"
+            self.log.write_text(f"# Transcript {now:%Y-%m-%d %H:%M} ({label})\n\n", encoding="utf-8")
+
+    def write_log(self, text):
+        if self.log:
+            with self.log.open("a", encoding="utf-8") as f:
+                f.write(text)
 
     async def send(self, **msg):
         try:
@@ -120,8 +128,8 @@ class Session:
             if samples is None:
                 return
             try:
-                ru = await loop.run_in_executor(asr_pool, final_asr, samples)
-                if not ru:
+                ru = (await loop.run_in_executor(asr_pool, final_asr, samples)).replace("<unk>", "").strip()
+                if not any(c.isalpha() for c in ru):  # silence / noise / decoder glitch
                     await self.send(type="partial", ru="", en="")
                     continue
                 stamp = f"{int(start // 3600):d}:{int(start % 3600 // 60):02d}:{int(start % 60):02d}"
@@ -132,16 +140,26 @@ class Session:
                         await self.send(type="partial", ru="", en="")
                         print(f"[{stamp}] (English sentence hidden)", flush=True)
                         continue
-                    en = await loop.run_in_executor(asr_pool, english_asr, samples) or ru
+                    en = await loop.run_in_executor(asr_pool, english_asr, samples)
+                    if sum(c.isalpha() for c in en) < 2:  # Whisper glitch (e.g. "!!!!!!"): don't show garbage
+                        print(f"[{stamp}] dropped unclear sentence [GigaAM heard: {ru[:80]}] [Whisper: {en[:40]}]", flush=True)
+                        await self.send(type="partial", ru="", en="")
+                        continue
                     await self.send(type="final", ru="", en=en, lang="en", start=round(start, 2), end=round(end, 2), engine="whisper")
-                    with self.log.open("a", encoding="utf-8") as f:
-                        f.write(f"**[{stamp}]** {en}  \n<sub>(spoken in English)</sub>\n\n")
-                    print(f"[{stamp}] (English) {en}", flush=True)
+                    self.write_log(f"**[{stamp}]** {en}  \n<sub>(spoken in English)</sub>\n\n")
+                    print(f"[{stamp}] (English) {en}   [GigaAM heard: {ru[:80]}]", flush=True)
                     continue
-                en, used = await loop.run_in_executor(pool, translate_chain, self.chain, ru)
-                await self.send(type="final", ru=ru, en=en, lang="ru", start=round(start, 2), end=round(end, 2), engine=used)
-                with self.log.open("a", encoding="utf-8") as f:
-                    f.write(f"**[{stamp}]** {en}  \n<sub>{ru}</sub>\n\n")
+                en, used, align = "", "", []
+                if self.learn:  # learning mode: Yandex gives word alignment for the color matching
+                    try:
+                        en, align = await loop.run_in_executor(pool, yandex_aligned, ru)
+                        used = "yandex"
+                    except Exception as e:
+                        print(f"[translate] aligned yandex failed ({e}); normal translation", flush=True)
+                if not en:
+                    en, used = await loop.run_in_executor(pool, translate_chain, self.chain, ru)
+                await self.send(type="final", ru=ru, en=en, lang="ru", start=round(start, 2), end=round(end, 2), engine=used, align=align)
+                self.write_log(f"**[{stamp}]** {en}  \n<sub>{ru}</sub>\n\n")
                 print(f"[{stamp}] ({used}) {ru}\n          → {en}", flush=True)
             except Exception as e:
                 print(f"[final] error: {e}", flush=True)
@@ -162,8 +180,9 @@ async def handler(ws):
     q = urllib.parse.parse_qs(url.query)
     chain = q.get("engine", ["auto"])[0]
     hide_en = q.get("hide_en", ["0"])[0] == "1"
-    print(f"client connected: {label} (engine={chain}, hide English={hide_en})", flush=True)
-    s = Session(ws, label, chain, hide_en)
+    learn = q.get("learn", ["0"])[0] == "1"
+    print(f"client connected: {label} (engine={chain}, hide English={hide_en}, learning mode={learn})", flush=True)
+    s = Session(ws, label, chain, hide_en, learn)
     await s.send(type="ready")
     try:
         async for msg in ws:
@@ -173,16 +192,18 @@ async def handler(ws):
         pass
     finally:
         await s.close()
-        print(f"client disconnected, transcript: {s.log}", flush=True)
+        print("client disconnected" + (f", server log: {s.log}" if s.log else ""), flush=True)
 
 
 async def main():
-    global final_asr, english_asr
+    global final_asr, english_asr, SAVE_TRANSCRIPTS
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--threads", type=int, default=4, help="CPU threads for speech recognition")
+    ap.add_argument("--save-transcripts", action="store_true", help="also keep a debug log of every session in server/transcripts/")
     a = ap.parse_args()
+    SAVE_TRANSCRIPTS = a.save_transcripts
     t = time.time()
     final_asr = FinalASR(a.threads)
     english_asr = EnglishASR(a.threads)

@@ -7,7 +7,9 @@ Live English subtitles for any Chrome tab playing Russian speech (online classes
 - **Speech recognition**: runs on your PC (GigaAM-v3 by Sber, the most accurate open Russian model). Light: it processes speech about 25× faster than real time on 4 CPU threads, and uses no CPU when nobody is speaking.
 - **Translation**: online only, through the free Google / Yandex web endpoints (no account, no key, no CPU). They're ranked by measured accuracy: **Google → Yandex (LLM) → Yandex (classic)**. If one fails, the next takes over automatically.
 - **English sentences**: if the speaker switches to English, that sentence is written down as said (Whisper-tiny) instead of being mistranslated. You can hide those sentences with a popup switch. Russian sentences with a few English words are always kept.
-- **Transcripts**: every session is saved to `server/transcripts/` (English + Russian, timestamped).
+- **Save transcripts (EN + RU)**: only if you choose it. Pick **Off** (default), **Manual** (Start/Stop saving button), or **Auto** (every session), in Markdown, SRT subtitles, plain text or JSON. Files go to `Downloads/ru-en-subtitles/`.
+- **Learning mode**: each Russian word and its English translation get the **same color**, and hovering a word highlights its pair. It uses Yandex's word alignment, so you learn as you read instead of only translating.
+- **Comfortable subtitle box**: newest sentence at the bottom (like Meet/Teams captions), with the latest one highlighted and older ones fading. A separate **LIVE** line shows the sentence being spoken. You can scroll back through history, and a "↓ new" button appears if you scrolled up. The box is resizable (min 320 px), has compact/expanded modes, A−/A+ text size and adjustable background opacity, and ✕ shrinks it to a "CC" pill. Motion is gentle and respects "reduce motion".
 
 ## Use it
 
@@ -21,7 +23,8 @@ Requirements: Linux (tested on Ubuntu with PipeWire), Google Chrome 138+, Python
    ```
 2. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick the `extension/` folder (once; after code updates click the reload ↻ icon).
 3. On the class tab: click the extension icon → **Start on this tab** (or press **Alt+Shift+Y**). Drag the subtitle box anywhere; it follows fullscreen video.
-4. Popup settings: translator (Best available = Google → Yandex), font size, number of lines, show/hide Russian, **hide sentences spoken in English**.
+4. Popup settings: translator (Best available = Google → Yandex), font size, background opacity, show/hide Russian, hide sentences spoken in English, **learning mode**, and **save transcript** (Off / Manual / Auto + format).
+5. In the box: drag the header to move it, drag the corner to resize, use A−/A+ for text size and ▾ for compact mode. Size and position are remembered per website.
 
 Stop: click **Stop**, press Alt+Shift+Y again, or close the tab. Stop the server with Ctrl+C.
 
@@ -38,14 +41,14 @@ ru-en-live-subtitles/
 ├── install-autostart.sh        optional autostart (systemd user service)
 ├── AGENTS.md                   guide for AI coding agents: constraints, protocol, gotchas (CLAUDE.md points here)
 ├── extension/                  Chrome MV3 extension: tabCapture → offscreen doc (keeps tab audible,
-│                               16 kHz PCM) → WebSocket → draggable subtitle overlay
+│                               16 kHz PCM) → WebSocket → subtitle overlay (content.js); transcript.js = file formats
 ├── server/
 │   ├── server.py               voice detection + recognition + translation, WebSocket on 127.0.0.1:8765
 │   ├── engine.py               local speech recognition (Silero VAD, GigaAM-v3, streaming Zipformer, Whisper-tiny for English)
 │   ├── translate.py            online translators, ranked by accuracy
 │   ├── download_models.sh      fetches the 4 models (~350 MB)
 │   ├── models/                 GigaAM-v3 (222 MB), Whisper-tiny for English (99 MB), live-text model (29 MB), voice detector (0.6 MB)
-│   ├── transcripts/            saved sessions (English + Russian, timestamped)
+│   ├── transcripts/            debug logs, only with ./start.sh --save-transcripts
 │   ├── tests/                  pytest (no models / network needed), run in CI
 │   └── dev/                    bench.py (benchmarks), test_client.py — not needed for normal use
 └── docs/research.md            the initial research on competitors and free options
@@ -99,7 +102,8 @@ Data: Google FLEURS Russian test set, 775 recordings, 413 female + 362 male spea
 
 ## Roadmap
 Next stage (tracked as [GitHub issues](https://github.com/abdullahmiraz/ru-en-live-subtitles/issues?q=label%3Anext-stage)):
-- Save translations (both languages) to a file: manual start/stop or auto-save, with format choices.
+- ~~Save translations (both languages) to a file~~ ✅ done (v1.1)
+- Learning-mode ideas: vocabulary list, Anki export, stress marks, Russian-first recall mode…
 - Auto-start on websites you list, and remember sites you've used it on.
 - Optionally record the class audio alongside the transcript.
 

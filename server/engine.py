@@ -71,7 +71,7 @@ WHISPER_TINY = MODELS / "sherpa-onnx-whisper-tiny"
 def looks_english(text: str) -> bool:
     """GigaAM writes English speech in Latin letters. Mostly-Latin text = an English sentence;
     Russian sentences with a few English words ("обсудим machine learning") stay Russian."""
-    letters = [c for c in text if c.isalpha()]
+    letters = [c for c in text.replace("<unk>", "") if c.isalpha()]
     if len(letters) < 4:
         return False
     latin = sum(c.isascii() for c in letters)

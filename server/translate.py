@@ -53,6 +53,30 @@ def yandex_nmt(text):
     return " ".join(d["text"]).strip()
 
 
+def yandex_aligned(text):
+    """Yandex (LLM) translation plus word alignment, for learning mode.
+    Returns (english, [[ru_start, ru_len, en_start, en_len], ...]) as character offsets."""
+    q = urllib.parse.urlencode({
+        "translateMode": "context", "context_title": "lecture", "id": f"{_sid}-0-0", "srv": "yabrowser",
+        "lang": "ru-en", "format": "html", "options": 4, "text": html.escape(text, quote=False),
+    })
+    d = _request(f"https://browser.translate.yandex.net/api/v1/tr.json/translate?{q}")
+    if d.get("code") != 200:
+        raise RuntimeError(d)
+    en = " ".join(d["text"]).strip()
+    pairs = []
+    # offsets refer to the escaped/html text, so only trust them when escaping changed nothing
+    if html.escape(text, quote=False) == text and html.unescape(en) == en:
+        for chunk in (d.get("align") or [""])[0].split(","):
+            try:
+                src, dst = chunk.split("-")
+                (rs, rl), (es, el) = (map(int, src.split(":")), map(int, dst.split(":")))
+                pairs.append([rs, rl, es, el])
+            except ValueError:
+                continue
+    return html.unescape(en), pairs
+
+
 ENGINES = {"google": google, "yandex": yandex, "yandex-nmt": yandex_nmt}
 
 
