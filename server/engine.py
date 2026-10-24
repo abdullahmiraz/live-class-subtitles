@@ -78,6 +78,22 @@ def looks_english(text: str) -> bool:
     return latin / len(letters) > 0.5
 
 
+def drop_repeats(text: str) -> str:
+    """Whisper-tiny sometimes loops: "A. A. A" -> "A". Stops at the first sentence that repeats
+    (or is the start of) an earlier one."""
+    import re
+    norm = lambda x: re.sub(r"[^\w ]", "", x.lower()).strip()
+    kept = []
+    for sent in re.split(r"(?<=[.!?])\s+", text.strip()):
+        n = norm(sent)
+        if not n:
+            continue
+        if any(n == norm(k) or norm(k).startswith(n) for k in kept):
+            break
+        kept.append(sent)
+    return " ".join(kept)
+
+
 class EnglishASR:
     """Whisper-tiny, used only for sentences that were spoken in English."""
 
@@ -95,4 +111,4 @@ class EnglishASR:
         s = self.rec.create_stream()
         s.accept_waveform(SAMPLE_RATE, samples)
         self.rec.decode_stream(s)
-        return s.result.text.strip()
+        return drop_repeats(s.result.text)

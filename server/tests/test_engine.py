@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest  # noqa: E402
 
-from engine import looks_english  # noqa: E402
+from engine import drop_repeats, looks_english  # noqa: E402
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -29,3 +29,15 @@ from engine import looks_english  # noqa: E402
 ])
 def test_looks_english(text, expected):
     assert looks_english(text) is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    # real Whisper-tiny output from a class
+    ("Economic instability is affecting market's worldwide. Economic instability is affecting market's worldwide. Economic instability",
+     "Economic instability is affecting market's worldwide."),
+    ("Any questions? Any questions?", "Any questions?"),
+    ("Open your books. Page twelve, please.", "Open your books. Page twelve, please."),
+    ("", ""),
+])
+def test_drop_repeats(text, expected):
+    assert drop_repeats(text) == expected
