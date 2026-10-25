@@ -26,7 +26,7 @@ Live subtitles for any Chrome tab playing Russian speech (online classes, YouTub
 ## Use it
 
 **Just install the extension. Nothing else needed**, on Windows, Mac, Linux and ChromeOS (Chrome 135+):
-1. Install it from the Chrome Web Store, or for the development version: `chrome://extensions` → **Developer mode** → **Load unpacked** → the `extension/` folder.
+1. Install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/bcjlobnpciccoaaifhidhodbialpeoml) (submitted 2026-10-25, in review), or for the development version: `chrome://extensions` → **Developer mode** → **Load unpacked** → the `extension/` folder.
 2. On the class tab: click the icon → **Start on this tab**, or press **Alt+Shift+Y**.
 
 ### Speech recognition engines (popup → Advanced)

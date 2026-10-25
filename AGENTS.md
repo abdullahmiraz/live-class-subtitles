@@ -4,6 +4,7 @@
 `abdullahmiraz/live-class-subtitles` (renamed from ru-en-live-subtitles; GitHub redirects old links), systemd unit
 `live-class-subtitles` (install-autostart.sh removes the old `ru-en-subtitles` unit), install dir
 `~/.local/share/live-class-subtitles`.
+Chrome Web Store item ID `bcjlobnpciccoaaifhidhodbialpeoml` (publisher "mirazxdev"); v2.0.0 submitted 2026-10-25, auto-publish after review.
 
 Live Russian → English (or 37 other languages) subtitles for any Chrome tab. A Chrome MV3 extension captures tab audio, and **one of three speech engines** turns it into text (popup → Advanced; `settings.speech`):
 - `chrome` (default): Chrome's Web Speech API on the captured track. Nothing to install, any OS.
